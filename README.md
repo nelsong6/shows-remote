@@ -37,9 +37,24 @@ Windows client, signs the executable and installer scripts, and publishes
 `scripts/publish.ps1 -WaitForRelease -InstallTargets local,upstairspc,treadmill`
 publishes that exact signed artifact to `\\NelsonNAS\files\shows-remote-app` and
 installs it in each interactive user session. Installation verifies hashes and
-the home Authenticode identity before switching the native version junction;
-errors leave the selected client unchanged. It never restarts the player.
+the home Authenticode identity before atomically switching a native executable
+hard link in a real channel directory;
+Rejected binaries leave the selected client unchanged. It never restarts the player.
 There is no new service, identity, credential store or durable playback state.
+
+Windows SSH enforces [RedirectionGuard](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-process-mitigation-redirection-trust-policy)
+for user-created directory junctions.
+The native channel path therefore contains a hard link to the immutable binary,
+with no reparse point to traverse. Updates replace directory entries rather
+than writing a running executable; connected agents keep running. The installer
+removes the initial junction layout. Before shipping installer changes, also run
+the distribution smoke in a real SSH session; a local CMD launch does not exercise
+that security context.
+`scripts/test-ssh-entry.ps1 -RemoteExe <physical-debug-executable>` enforces this
+check: it requires an SSH session with RedirectionGuard enabled, uses isolated
+temporary installs, subscribes to the already running local player's SSE feed,
+updates the native entry with that agent connected, and verifies another read.
+It never changes playback, the menu or the installed release channel.
 
 ## Source history
 

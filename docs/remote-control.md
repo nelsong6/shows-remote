@@ -93,7 +93,8 @@ round. The target owns playback and all authoritative NAS transactions.
 
 The executable has its own immutable, signed and hash-verified channel under
 `shows-remote-app`. The installer exposes its native binary through a local
-version junction and adds it to PATH. It never installs or restarts a player.
+hard link in a real directory and adds it to PATH. The SSH path contains no
+directory junction. It never installs or restarts a player.
 The at-menu launches that binary directly. Protocol 1 is defined by the
 desktop-owned `shows-control` crate, pinned by immutable Git revision in this
 repository; it requires matching protocol support, not matching release SHAs.

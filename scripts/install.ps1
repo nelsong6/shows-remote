@@ -84,45 +84,62 @@ $selectedDir = Join-Path $versions $selectedVersion
 $exe = Join-Path $selectedDir "shows-remote.exe"
 if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "Installed executable is missing: $exe" }
 
-# Expose the verified version as a native entry point, following the home tools'
-# version/current junction model. Never remove a real directory or its contents.
+# SSH enforces RedirectionGuard on user-created directory junctions. A hard
+# link exposes the immutable executable without introducing a reparse point.
 $channels = [IO.Path]::GetFullPath((Join-Path $InstallRoot 'channels'))
 New-Item -ItemType Directory -Force -Path $channels | Out-Null
-$entry = Join-Path $channels $Channel
-$next = $entry + '.next'
-$previous = $entry + '.previous'
+$entryDir = Join-Path $channels $Channel
+$entry = Join-Path $entryDir 'shows-remote.exe'
+$next = Join-Path $channels "$Channel.next.exe"
+$previous = Join-Path $channels "$Channel.previous.exe"
+foreach ($directory in @($channels,$entryDir)) {
+  $item = Get-Item -LiteralPath $directory -Force -ErrorAction SilentlyContinue
+  if ($item -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -and ($directory -eq $channels -or $item.LinkType -ne 'Junction')) { throw "Unexpected native entry type: $directory" }
+}
 foreach ($path in @($entry, $next, $previous)) {
   if (-not ([IO.Path]::GetFullPath($path)).StartsWith($channels + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe native entry path' }
+}
+$directory = Get-Item -LiteralPath $entryDir -Force -ErrorAction SilentlyContinue
+if ($directory -and $directory.LinkType -eq 'Junction') {
+  $target = [IO.Path]::GetFullPath([string]$directory.Target)
+  if (-not $target.StartsWith([IO.Path]::GetFullPath($versions) + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { throw 'Retired entry points outside managed versions' }
+  if (Test-Path -LiteralPath $previous) { [IO.File]::Delete($previous) }
+  New-Item -ItemType HardLink -Path $previous -Target (Join-Path $target 'shows-remote.exe') | Out-Null
+  [IO.Directory]::Delete($entryDir)
+}
+New-Item -ItemType Directory -Force -Path $entryDir | Out-Null
+foreach ($path in @($entry,$next,$previous)) {
   $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
-  if ($item -and $item.LinkType -ne 'Junction') { throw "Refusing to replace non-junction $path" }
+  if ($item -and ($item.PSIsContainer -or $item.LinkType -ne 'HardLink')) { throw "Refusing to replace unmanaged native file: $path" }
 }
 if (Test-Path -LiteralPath $previous) {
-  if (-not (Test-Path -LiteralPath $entry)) { [IO.Directory]::Move($previous, $entry) }
-  else { [IO.Directory]::Delete($previous) }
+  if (-not (Test-Path -LiteralPath $entry)) { [IO.File]::Move($previous, $entry) }
+  else { [IO.File]::Delete($previous) }
 }
-if (Test-Path -LiteralPath $next) { [IO.Directory]::Delete($next) }
-$existing = Get-Item -LiteralPath $entry -Force -ErrorAction SilentlyContinue
-if (-not $existing -or [IO.Path]::GetFullPath([string]$existing.Target) -ne [IO.Path]::GetFullPath($selectedDir)) {
-  New-Item -ItemType Junction -Path $next -Target $selectedDir | Out-Null
+if (Test-Path -LiteralPath $next) { [IO.File]::Delete($next) }
+$exists = Test-Path -LiteralPath $entry
+if (-not $exists -or $oldVersion -ne $selectedVersion -or (Get-FileHash -LiteralPath $entry -Algorithm SHA256).Hash.ToLowerInvariant() -ne $manifest.files[0].sha256) {
+  New-Item -ItemType HardLink -Path $next -Target $exe | Out-Null
   try {
-    if ($existing) { [IO.Directory]::Move($entry, $previous) }
-    try { [IO.Directory]::Move($next, $entry) }
-    catch { if (Test-Path -LiteralPath $previous) { [IO.Directory]::Move($previous, $entry) }; throw }
-    try {
-      if ($oldVersion -ne $selectedVersion) { Save-State $nextState }
-    } catch {
-      [IO.Directory]::Delete($entry)
-      if (Test-Path -LiteralPath $previous) { [IO.Directory]::Move($previous, $entry) }
-      throw
+    if ($exists) { [IO.File]::Replace($next, $entry, $previous) }
+    else { [IO.File]::Move($next, $entry) }
+    if ($oldVersion -ne $selectedVersion) { Save-State $nextState }
+  } catch {
+    if (Test-Path -LiteralPath $previous) {
+      if (Test-Path -LiteralPath $entry) { [IO.File]::Replace($previous, $entry, $null) }
+      else { [IO.File]::Move($previous, $entry) }
+    } elseif (-not $exists -and (Test-Path -LiteralPath $entry)) {
+      [IO.File]::Delete($entry)
     }
-    if (Test-Path -LiteralPath $previous) { [IO.Directory]::Delete($previous) }
-  } finally { if (Test-Path -LiteralPath $next) { [IO.Directory]::Delete($next) } }
+    throw
+  } finally { if (Test-Path -LiteralPath $next) { [IO.File]::Delete($next) } }
+  if (Test-Path -LiteralPath $previous) { [IO.File]::Delete($previous) }
 } elseif ($oldVersion -ne $selectedVersion) { Save-State $nextState }
 if (-not $NoPathUpdate) {
   $oldEntry = Join-Path $env:LOCALAPPDATA "shows\channels\$Channel"
   $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-  $entries = @($userPath -split ';' | Where-Object { $_ -and $_ -ine $entry -and $_ -ine $oldEntry })
-  [Environment]::SetEnvironmentVariable('Path', ((@($entry) + $entries) -join ';'), 'User')
-  $env:Path = $entry + ';' + (($env:Path -split ';' | Where-Object { $_ -and $_ -ine $entry -and $_ -ine $oldEntry }) -join ';')
+  $entries = @($userPath -split ';' | Where-Object { $_ -and $_ -ine $entryDir -and $_ -ine $oldEntry })
+  [Environment]::SetEnvironmentVariable('Path', ((@($entryDir) + $entries) -join ';'), 'User')
+  $env:Path = $entryDir + ';' + (($env:Path -split ';' | Where-Object { $_ -and $_ -ine $entryDir -and $_ -ine $oldEntry }) -join ';')
 }
 Write-Host "Installed independent Shows remote $selectedVersion at $entry"

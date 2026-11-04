@@ -129,7 +129,7 @@ fn one_shot_commands_never_pick_an_implicit_machine() {
 
 #[cfg(windows)]
 #[test]
-fn installed_windows_agent_inherits_protocol_pipes_through_the_remote_entry_point() {
+fn installed_windows_agent_keeps_protocol_pipes_during_native_update() {
     use std::io::Write;
     use std::os::windows::process::CommandExt;
     use std::process::Stdio;
@@ -138,24 +138,32 @@ fn installed_windows_agent_inherits_protocol_pipes_through_the_remote_entry_poin
     let root = local_data.join("shows-remote");
     let version = root.join("channels").join("stable");
     std::fs::create_dir_all(&version).unwrap();
-    std::fs::copy(
-        env!("CARGO_BIN_EXE_shows-remote"),
-        version.join("shows-remote.exe"),
-    )
-    .unwrap();
+    let immutable = root.join("versions").join("first");
+    std::fs::create_dir_all(&immutable).unwrap();
+    let binary = immutable.join("shows-remote.exe");
+    std::fs::copy(env!("CARGO_BIN_EXE_shows-remote"), &binary).unwrap();
+    let entry = version.join("shows-remote.exe");
+    std::fs::hard_link(&binary, &entry).unwrap();
     let server = Server::http("127.0.0.1:0").unwrap();
     let port = server.server_addr().to_ip().unwrap().port();
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel();
     let worker = std::thread::spawn(move || {
-        for value in [
+        for (index, value) in [
             identity().1,
             json!({"phase":"playing","message":"Télévision"}),
-        ] {
+        ]
+        .into_iter()
+        .enumerate()
+        {
             server
                 .recv_timeout(Duration::from_secs(5))
                 .unwrap()
                 .expect("agent HTTP request")
                 .respond(Response::from_string(value.to_string()))
                 .unwrap();
+            if index == 0 {
+                ready_tx.send(()).unwrap();
+            }
         }
     });
     let mut child = Command::new("cmd.exe")
@@ -171,6 +179,11 @@ fn installed_windows_agent_inherits_protocol_pipes_through_the_remote_entry_poin
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
+    ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    let previous = version.join("previous.exe");
+    std::fs::rename(&entry, &previous).unwrap();
+    std::fs::hard_link(&binary, &entry).unwrap();
+    std::fs::remove_file(previous).unwrap();
     child
         .stdin
         .take()

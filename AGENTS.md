@@ -25,6 +25,7 @@ CI validates Windows and Linux clients; main builds a signed Windows release
 without compiling the desktop or fetching libmpv. Publish and install that exact
 release with `scripts/publish.ps1 -WaitForRelease -InstallTargets local,upstairspc,treadmill`.
 Stable accepts only signed CI artifacts. The separate NAS channel is
-`\\NelsonNAS\files\shows-remote-app`; installation uses native version junctions
-and no runtime PowerShell wrapper. Preserve the command, at-menu entry, fzt
+`\\NelsonNAS\files\shows-remote-app`; installation atomically switches a native
+executable hard link in a real channel directory (no junction on the SSH path).
+There is no runtime PowerShell wrapper. Preserve the command, at-menu entry, fzt
 palette, playback state, visible failures, bounded requests and child cleanup.

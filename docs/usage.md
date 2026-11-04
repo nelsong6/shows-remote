@@ -60,7 +60,7 @@ command may already have applied; inspect status before retrying.
 Publish the independent CI release using
 `scripts/publish.ps1 -WaitForRelease -InstallTargets local,upstairspc,treadmill`.
 Its signed installer verifies and installs the selected client, exposes a native
-version junction under `%LOCALAPPDATA%\shows-remote\channels\stable`, and adds it
+executable hard link under `%LOCALAPPDATA%\shows-remote\channels\stable`, and adds it
 to user PATH. Setup and update
 scripts maintain this path; opening the remote runs the binary directly with
 no PowerShell or batch wrapper. Publishing with installation targets updates
