@@ -1,0 +1,91 @@
+name: Shows remote
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: remote-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  portable:
+    name: Portable client tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: https://github.com/dtolnay/rust-toolchain@stable
+      - uses: https://github.com/Swatinem/rust-cache@v2
+      - run: cargo test --locked
+  windows:
+    name: Windows client and installation
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh -NoLogo -NoProfile -NonInteractive -Command "$ErrorActionPreference = 'Stop'; . ([scriptblock]::Create([IO.File]::ReadAllText('{0}'))); if (Test-Path variable:LASTEXITCODE) { exit $LASTEXITCODE }"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: https://github.com/actions/cache@v4
+        with:
+          path: target
+          key: shows-remote-windows-v1-${{ hashFiles('Cargo.lock') }}
+          restore-keys: shows-remote-windows-v1-
+      - run: rustup update stable --no-self-update
+      - name: Test and build debug client
+        run: |
+          cargo test --locked -j 4
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo build --locked -j 4
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./scripts/test-distribution.ps1 -RemoteExe target/debug/shows-remote.exe
+          foreach ($file in Get-ChildItem scripts/*.ps1) {
+            $tokens=$null; $errors=$null
+            [Management.Automation.Language.Parser]::ParseFile($file.FullName,[ref]$tokens,[ref]$errors) | Out-Null
+            if ($errors) { throw ($errors | Out-String) }
+          }
+      - name: Build independent release
+        if: github.event_name != 'pull_request'
+        env:
+          SHOWS_BUILD_SHA: ${{ github.sha }}
+        run: |
+          cargo build --release --locked -j 4
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Prepare independent bundle
+        run: |
+          $profile=if ('${{ github.event_name }}' -eq 'pull_request') { 'debug' } else { 'release' }
+          New-Item -ItemType Directory -Force bundle | Out-Null
+          Copy-Item "target/$profile/shows-remote.exe" bundle/
+          Copy-Item scripts/install.ps1,scripts/install-update.ps1 bundle/
+      - name: Sign independent bundle
+        env:
+          AT_TERMINAL_PFX: ${{ secrets.AT_TERMINAL_PFX }}
+          AT_TERMINAL_PFX_PASSWORD: ${{ secrets.AT_TERMINAL_PFX_PASSWORD }}
+        run: ./scripts/sign.ps1 -BundleDirectory bundle
+      - name: Verify signed stable installation
+        run: ./scripts/test-distribution.ps1 -RemoteExe target/debug/shows-remote.exe -SignedBundleDirectory bundle
+      - name: Publish independent release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          Compress-Archive -Path bundle/* -DestinationPath shows-remote-windows-amd64.zip
+          $sha=(git rev-parse HEAD).Trim(); $tag='remote-' + $sha.Substring(0,7)
+          $api="$env:GITHUB_SERVER_URL/api/v1/repos/$env:GITHUB_REPOSITORY"
+          $headers=@{Authorization="token $env:TOKEN"}
+          $existing=Invoke-RestMethod "$api/releases/tags/$tag" -Headers $headers -SkipHttpErrorCheck -StatusCodeVariable code
+          if ($code -eq 200 -and -not $existing.draft) {
+            $tagged=Invoke-RestMethod "$api/tags/$tag" -Headers $headers
+            if ($tagged.commit.sha -ne $sha -or $existing.target_commitish -ne $sha -or -not ($existing.assets | Where-Object { $_.name -eq 'shows-remote-windows-amd64.zip' -and $_.size -gt 0 })) { throw 'Published release identity differs' }
+            Write-Host "Signed release $tag is already published"
+            exit 0
+          }
+          if ($code -notin @(200,404)) { throw "Release lookup returned $code" }
+          if ($code -eq 200) { $release=$existing } else {
+            $release=Invoke-RestMethod "$api/releases" -Method Post -Headers $headers -ContentType application/json -Body (@{tag_name=$tag;target_commitish=$sha;name="Shows remote $tag";body="Independent signed Windows client for control protocol 1, built from $sha.";draft=$true} | ConvertTo-Json)
+          }
+          foreach ($asset in @($release.assets)) { Invoke-RestMethod "$api/releases/$($release.id)/assets/$($asset.id)" -Method Delete -Headers $headers | Out-Null }
+          Invoke-RestMethod "$api/releases/$($release.id)/assets?name=shows-remote-windows-amd64.zip" -Method Post -Headers $headers -Form @{attachment=Get-Item shows-remote-windows-amd64.zip} | Out-Null
+          Invoke-RestMethod "$api/releases/$($release.id)" -Method Patch -Headers $headers -ContentType application/json -Body '{"draft":false}' | Out-Null

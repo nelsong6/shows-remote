@@ -1,0 +1,25 @@
+# Build artifacts
+/bin/
+/dist/
+*.exe
+*.test
+
+# Rust workspace build dir (per-workspace, not just at the repo root).
+target/
+
+# Local config
+.env
+.env.*
+!.env.example
+token.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/
