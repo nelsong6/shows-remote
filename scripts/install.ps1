@@ -33,7 +33,7 @@ function Assert-File([string]$Path, [object]$Metadata) {
 }
 
 function Install-Version([object]$manifest) {
-  if ($manifest.schema -ne 1) { throw "Unsupported channel manifest schema: $($manifest.schema)" }
+  if ($manifest.schema -ne 2) { throw "Unsupported channel manifest schema: $($manifest.schema)" }
   if ($manifest.channel -ne $Channel) { throw "Channel manifest is for $($manifest.channel), expected $Channel" }
   if ($manifest.version -notmatch '^[A-Za-z0-9._-]+$') { throw "Unsafe version in manifest" }
   $fileNames = @($manifest.files | ForEach-Object { $_.name })
@@ -41,6 +41,7 @@ function Install-Version([object]$manifest) {
   foreach ($required in @("shows-remote.exe")) {
     if ($required -notin $fileNames) { throw "Manifest is missing $required" }
   }
+  if ($manifest.archive.name -ne 'shows-remote.zip' -or $manifest.archive.length -le 0 -or $manifest.archive.length -gt 64MB -or $manifest.archive.sha256 -notmatch '^[0-9a-f]{64}$' -or $manifest.files[0].length -le 0 -or $manifest.files[0].length -gt 128MB) { throw 'Invalid remote archive metadata' }
 
   $destination = Join-Path $versions $manifest.version
   if (-not (Test-Path -LiteralPath $destination -PathType Container)) {
@@ -48,13 +49,17 @@ function Install-Version([object]$manifest) {
     $stage = Join-Path $InstallRoot ".staging-$([guid]::NewGuid().ToString('N'))"
     New-Item -ItemType Directory -Path $stage | Out-Null
     try {
-      foreach ($file in $manifest.files) {
-        if ($file.name -notmatch '^[A-Za-z0-9._-]+$') { throw "Unsafe file name in manifest" }
-        $sourceFile = Join-Path $source $file.name
-        $targetFile = Join-Path $stage $file.name
-        Copy-Item -LiteralPath $sourceFile -Destination $targetFile
-        Assert-File $targetFile $file
-      }
+      $archive = Join-Path $stage 'shows-remote.zip'
+      Copy-Item -LiteralPath (Join-Path $source $manifest.archive.name) -Destination $archive
+      if ((Get-Item -LiteralPath $archive).Length -ne $manifest.archive.length -or (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant() -ne $manifest.archive.sha256) { throw 'Remote archive integrity mismatch' }
+      Add-Type -AssemblyName System.IO.Compression.FileSystem
+      $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+      try {
+        if ($zip.Entries.Count -ne 1 -or $zip.Entries[0].FullName -ne 'shows-remote.exe' -or $zip.Entries[0].Length -ne $manifest.files[0].length) { throw 'Remote archive must contain only its declared executable' }
+        [IO.Compression.ZipFileExtensions]::ExtractToFile($zip.Entries[0], (Join-Path $stage 'shows-remote.exe'))
+      } finally { $zip.Dispose() }
+      Remove-Item -LiteralPath $archive
+      foreach ($file in $manifest.files) { Assert-File (Join-Path $stage $file.name) $file }
       Move-Item -LiteralPath $stage -Destination $destination
     } finally {
       if (Test-Path -LiteralPath $stage) {

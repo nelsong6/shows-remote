@@ -10,7 +10,7 @@ try {
   if ($certificate.Thumbprint -ne $expected -or -not $certificate.HasPrivateKey) { throw 'Unexpected home signing certificate' }
   # The Windows runner already trusts the home identity. Do not mutate its shared
   # trust stores: CurrentUser Root changes require an interactive Windows session.
-  foreach ($name in @('shows-remote.exe','install.ps1','install-update.ps1')) {
+  foreach ($name in @('shows-remote.exe','install.ps1','install-update.ps1','configure-defender.ps1')) {
     $file = Join-Path $BundleDirectory $name
     $signature = Set-AuthenticodeSignature -FilePath $file -Certificate $certificate -HashAlgorithm SHA256
     if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Thumbprint -ne $expected) { throw "Signing verification failed for $name`: $($signature.Status)" }

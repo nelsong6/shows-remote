@@ -58,7 +58,7 @@ jobs:
           $profile=if ('${{ github.event_name }}' -eq 'pull_request') { 'debug' } else { 'release' }
           New-Item -ItemType Directory -Force bundle | Out-Null
           Copy-Item "target/$profile/shows-remote.exe" bundle/
-          Copy-Item scripts/install.ps1,scripts/install-update.ps1 bundle/
+          Copy-Item scripts/install.ps1,scripts/install-update.ps1,scripts/configure-defender.ps1 bundle/
       - name: Sign independent bundle
         env:
           AT_TERMINAL_PFX: ${{ secrets.AT_TERMINAL_PFX }}

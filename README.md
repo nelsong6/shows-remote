@@ -42,6 +42,28 @@ hard link in a real channel directory;
 Rejected binaries leave the selected client unchanged. It never restarts the player.
 There is no new service, identity, credential store or durable playback state.
 
+Home PCs use a persistent Defender exclusion limited to the current user's
+`%LOCALAPPDATA%\shows-remote` installation folder, approved because real-time
+protection quarantined the independently signed client. It covers staging and
+future versions without per-build submissions. Defender skips everything in that
+folder; the exclusion itself does not enforce signatures. The installer still
+requires the pinned signer and published SHA-256. No process, extension, source,
+build-directory or other-app exclusions are added.
+
+The release includes signed `configure-defender.ps1`. Run it elevated as the
+interactive user with `-Action Apply`, `-Action Check` (the default), or
+`-Action Remove` to reverse the rule. The helper accepts no path override, changes
+only this app's exact folder entry, preserves unrelated exclusions and reports
+Defender's protection state. Installation and updates never change antivirus
+policy silently; the one-time folder rule persists independently of releases.
+
+Channel schema 2 stores a hash-verified ZIP containing only the executable on
+the NAS. Publishing downloads and verifies CI assets inside the app folder;
+installation copies the ZIP there before extracting and verifying the signed
+executable. This avoids opening a flagged raw EXE on the share and needs no NAS
+exclusion. Archive size and contents are bounded and checked before extraction.
+The retired unpacked channel format is not accepted.
+
 Windows SSH enforces [RedirectionGuard](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-process-mitigation-redirection-trust-policy)
 for user-created directory junctions.
 The native channel path therefore contains a hard link to the immutable binary,

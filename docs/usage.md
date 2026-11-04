@@ -65,6 +65,16 @@ to user PATH. Setup and update
 scripts maintain this path; opening the remote runs the binary directly with
 no PowerShell or batch wrapper. Publishing with installation targets updates
 the selected version; the remote does not check for updates on every opening.
+
+Home setup also applies the signed `configure-defender.ps1 -Action Apply` once,
+elevated as the same Windows user. It excludes only that user's
+`%LOCALAPPDATA%\shows-remote` folder from Defender scanning, covering future
+versions and staging. Everything placed there is excluded; installation still
+verifies its pinned signer and hashes. `-Action Check` reads the rule and protection
+state, and `-Action Remove` reverses it without changing other exclusions. The
+installer does not add this exception implicitly. Defender's other protections
+remain enabled.
+
 The instance picker and command palette use the managed fzt executable at
 `%ProgramFiles%\at-home\fzt\current\fzt.exe`, installed by home-sync. A missing
 fzt installation explains how to install it and fails explicitly.

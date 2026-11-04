@@ -95,6 +95,14 @@ The executable has its own immutable, signed and hash-verified channel under
 `shows-remote-app`. The installer exposes its native binary through a local
 hard link in a real directory and adds it to PATH. The SSH path contains no
 directory junction. It never installs or restarts a player.
+The approved home Defender exception covers only the current user's remote
+installation folder, including staging and future versions. The separately
+invoked signed setup helper adds, checks or removes that exact folder entry;
+normal updates do not change policy. Unrelated exclusions and protection features
+remain unchanged, and signature/hash verification remains mandatory.
+Channel schema 2 transfers a bounded, hash-verified executable-only ZIP from the
+NAS and extracts it inside the local app folder before signer/hash checks. No raw
+EXE is opened on the share; no NAS or publisher-temp-directory exclusion is needed.
 The at-menu launches that binary directly. Protocol 1 is defined by the
 desktop-owned `shows-control` crate, pinned by immutable Git revision in this
 repository; it requires matching protocol support, not matching release SHAs.

@@ -14,7 +14,9 @@ $expectedSigner = 'FE35227FED82F2429AFE763A36358ADDD79C7A4F'
 $previousPrompt = $env:GIT_TERMINAL_PROMPT
 $previousInteractive = $env:GCM_INTERACTIVE
 $download = $null
+$package = $null
 $stage = $null
+$cacheRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'shows-remote'
 try {
   if ($Channel -eq 'stable') {
     if ($Version -or $ExePath) { throw 'Stable accepts only its signed Forgejo release' }
@@ -45,13 +47,14 @@ try {
       Write-Host "Waiting for signed Shows remote release $Release"
       Start-Sleep -Seconds 10
     } while ($true)
-    $download = Join-Path ([IO.Path]::GetTempPath()) ('shows-remote-release-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Force -Path $cacheRoot | Out-Null
+    $download = Join-Path $cacheRoot ('.release-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $download | Out-Null
     $asset = @($metadata.assets | Where-Object name -eq 'shows-remote-windows-amd64.zip')[0]
     Invoke-WebRequest $asset.browser_download_url -Headers $headers -OutFile (Join-Path $download 'release.zip')
     Expand-Archive -LiteralPath (Join-Path $download 'release.zip') -DestinationPath (Join-Path $download 'bundle')
     $bundle = Join-Path $download 'bundle'
-    foreach ($name in @('shows-remote.exe','install.ps1','install-update.ps1')) {
+    foreach ($name in @('shows-remote.exe','install.ps1','install-update.ps1','configure-defender.ps1')) {
       $signature = Get-AuthenticodeSignature -LiteralPath (Join-Path $bundle $name)
       if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Thumbprint -ne $expectedSigner) { throw "Release signature rejected: $name" }
     }
@@ -70,20 +73,29 @@ try {
   New-Item -ItemType Directory -Force -Path $versions,$channels | Out-Null
   $file = Get-Item -LiteralPath $ExePath
   $entry = [ordered]@{name='shows-remote.exe';length=$file.Length;sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName).Hash.ToLowerInvariant()}
-  $manifest = [ordered]@{schema=1;product='shows-remote';channel=$Channel;version=$Version;files=@($entry)}
+  $manifest = [ordered]@{schema=2;product='shows-remote';channel=$Channel;version=$Version;files=@($entry);archive=$null}
   $destination = Join-Path $versions $Version
   if (Test-Path -LiteralPath $destination) {
     $existing = Get-Content -Raw -LiteralPath (Join-Path $destination 'manifest.json') | ConvertFrom-Json
-    $existingFile = Join-Path $destination 'shows-remote.exe'
-    if ($existing.product -ne 'shows-remote' -or $existing.files.Count -ne 1 -or $existing.files[0].sha256 -ne $entry.sha256 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $existingFile).Hash.ToLowerInvariant() -ne $entry.sha256) { throw 'Immutable release content differs' }
+    if ($existing.schema -ne 2 -or $existing.product -ne 'shows-remote' -or $existing.files.Count -ne 1 -or $existing.files[0].sha256 -ne $entry.sha256 -or $existing.archive.name -ne 'shows-remote.zip') { throw 'Immutable release content differs' }
+    $existingArchive = Join-Path $destination $existing.archive.name
+    if ((Get-Item -LiteralPath $existingArchive).Length -ne $existing.archive.length -or (Get-FileHash -Algorithm SHA256 -LiteralPath $existingArchive).Hash.ToLowerInvariant() -ne $existing.archive.sha256) { throw 'Immutable release archive differs' }
+    $manifest.archive = $existing.archive
   } else {
+    New-Item -ItemType Directory -Force -Path $cacheRoot | Out-Null
+    $package = Join-Path $cacheRoot ('.package-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path (Join-Path $package 'payload') | Out-Null
+    Copy-Item -LiteralPath $ExePath -Destination (Join-Path $package 'payload\shows-remote.exe')
+    $archive = Join-Path $package 'shows-remote.zip'
+    Compress-Archive -LiteralPath (Join-Path $package 'payload\shows-remote.exe') -DestinationPath $archive
+    $manifest.archive = @{name='shows-remote.zip';length=(Get-Item -LiteralPath $archive).Length;sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()}
     $stage = Join-Path $NasRoot ('.staging-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $stage | Out-Null
-    Copy-Item -LiteralPath $ExePath -Destination (Join-Path $stage 'shows-remote.exe')
+    Copy-Item -LiteralPath $archive -Destination (Join-Path $stage 'shows-remote.zip')
     [IO.File]::WriteAllText((Join-Path $stage 'manifest.json'),($manifest | ConvertTo-Json -Depth 5))
     Move-Item -LiteralPath $stage -Destination $destination
   }
-  foreach ($name in @('install.ps1','install-update.ps1')) {
+  foreach ($name in @('install.ps1','install-update.ps1','configure-defender.ps1')) {
     $temporary = Join-Path $NasRoot ($name + '.' + [guid]::NewGuid().ToString('N') + '.tmp')
     Copy-Item -LiteralPath (Join-Path $bundle $name) -Destination $temporary
     Move-Item -LiteralPath $temporary -Destination (Join-Path $NasRoot $name) -Force
@@ -101,9 +113,11 @@ try {
     if (-not $resolved.StartsWith([IO.Path]::GetFullPath($NasRoot) + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase) -or (Split-Path -Leaf $resolved) -notlike '.staging-*') { throw 'Unsafe publication cleanup path' }
     Remove-Item -LiteralPath $resolved -Recurse -Force
   }
-  if ($download -and (Test-Path -LiteralPath $download)) {
-    $resolved = [IO.Path]::GetFullPath($download)
-    if (-not $resolved.StartsWith([IO.Path]::GetFullPath([IO.Path]::GetTempPath()),[StringComparison]::OrdinalIgnoreCase) -or (Split-Path -Leaf $resolved) -notlike 'shows-remote-release-*') { throw 'Unsafe release cleanup path' }
-    Remove-Item -LiteralPath $resolved -Recurse -Force
+  foreach ($cache in @($download,$package)) {
+    if ($cache -and (Test-Path -LiteralPath $cache)) {
+      $resolved = [IO.Path]::GetFullPath($cache)
+      if (-not $resolved.StartsWith([IO.Path]::GetFullPath($cacheRoot) + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase) -or (Split-Path -Leaf $resolved) -notmatch '^\.(release|package)-[0-9a-f]{32}$') { throw 'Unsafe release cleanup path' }
+      Remove-Item -LiteralPath $resolved -Recurse -Force
+    }
   }
 }
