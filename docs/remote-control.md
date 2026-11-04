@@ -38,7 +38,7 @@ round. The target owns playback and all authoritative NAS transactions.
 
 - **C0. Discoverable actions.** `/` opens the fzt command palette, advertised on
   screen. It provides playback and current-round show selection when controls
-  are available, plus reconnect, change instance, and quit. Cancel executes
+  are available, plus reconnect, change instance, info, and quit. Cancel executes
   nothing. Switching closes the previous agent, leaves its player unchanged,
   and returns to instance selection. Status queued while the palette is open
   is consumed before another playback command is accepted.
@@ -88,6 +88,19 @@ round. The target owns playback and all authoritative NAS transactions.
   Preview rows preserve the displayed video's top-to-bottom and left-to-right
   orientation. The D3D-shared surface is already in display row order; ASCII
   conversion must not reverse it.
+
+- **C7. Info panel.** The palette's **info** action is always available and
+  replaces the screen until any key, which only closes it. It lists Repo, Link,
+  Version (the `remote-<sha>` release tag), Built (Pacific time and plain elapsed
+  language), Installed (`current_exe`) and Checkout (`D:\repos\<repo-name>` when
+  that folder has `.git`, else "no checkout on this PC"). CI stamps repo, link,
+  commit and build time at compile time from `GITHUB_REPOSITORY`,
+  `GITHUB_SERVER_URL`, `SHOWS_BUILD_SHA` and `SHOWS_BUILD_TIME`; none is typed into
+  source. Each unstamped value reads "development build, not from CI", and
+  unreadable values are stated. The text is borderless and fixed once opened, and
+  the app requests no mouse reporting, so the terminal's normal selection gesture
+  works while status arrives. Live status stays consumed behind the panel; preview
+  reads stop, as they do for the palette.
 
 ## Distribution and evidence
 

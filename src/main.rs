@@ -2,6 +2,7 @@
 
 mod agent;
 mod discovery;
+mod info;
 mod picker;
 mod ui;
 

@@ -51,6 +51,7 @@ jobs:
         env:
           SHOWS_BUILD_SHA: ${{ github.sha }}
         run: |
+          $env:SHOWS_BUILD_TIME=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
           cargo build --release --locked -j 4
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Prepare independent bundle

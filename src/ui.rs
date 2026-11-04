@@ -12,7 +12,7 @@ use shows_control::preview::{INTERVAL, VideoPreview};
 use shows_control::{Command, Frame};
 
 use crate::{
-    clock, current,
+    clock, current, info,
     picker::{self, Choice},
     text,
     transport::{REQUEST_TIMEOUT, Session},
@@ -29,6 +29,7 @@ struct Model {
     preview_pending: Option<(u64, Instant)>,
     preview_attempt: Option<Instant>,
     preview_error: Option<String>,
+    info: Option<String>,
 }
 
 impl Model {
@@ -44,6 +45,7 @@ impl Model {
             preview_pending: None,
             preview_attempt: None,
             preview_error: None,
+            info: None,
         }
     }
 
@@ -113,6 +115,14 @@ impl Model {
         self.preview_attempt = None;
     }
 
+    fn may_request_preview(&self) -> bool {
+        self.visualizer
+            && self.connected
+            && self.info.is_none()
+            && self.pending.is_none()
+            && self.preview_pending.is_none()
+    }
+
     fn request_preview(&mut self, session: &mut Session) {
         if self
             .preview_pending
@@ -128,10 +138,7 @@ impl Model {
         } else {
             INTERVAL
         };
-        if self.visualizer
-            && self.connected
-            && self.pending.is_none()
-            && self.preview_pending.is_none()
+        if self.may_request_preview()
             && self
                 .preview_attempt
                 .is_none_or(|at| at.elapsed() >= interval)
@@ -181,6 +188,14 @@ impl Model {
 }
 
 fn draw(frame: &mut TerminalFrame, model: &Model, target: &str) {
+    if let Some(info) = model.info.as_deref() {
+        // Borderless, so a drag across a line copies only its text.
+        frame.render_widget(
+            Paragraph::new(info).wrap(Wrap { trim: false }),
+            frame.area(),
+        );
+        return;
+    }
     let areas = Layout::vertical([
         Constraint::Length(4),
         Constraint::Length(3),
@@ -330,7 +345,7 @@ fn draw(frame: &mut TerminalFrame, model: &Model, target: &str) {
         .wrap(Wrap { trim: true }), areas[4]);
 }
 
-fn palette(model: &Model) -> Result<Option<String>, String> {
+fn palette_choices(model: &Model) -> Vec<Choice> {
     let mut choices = vec![
         Choice {
             id: "visualizer".into(),
@@ -351,6 +366,11 @@ fn palette(model: &Model) -> Result<Option<String>, String> {
             id: "reconnect".into(),
             name: "Reconnect".into(),
             description: "Connect again without replaying commands".into(),
+        },
+        Choice {
+            id: "info".into(),
+            name: "info".into(),
+            description: "Show this app's repo, build, install path and checkout".into(),
         },
         Choice {
             id: "quit".into(),
@@ -396,7 +416,7 @@ fn palette(model: &Model) -> Result<Option<String>, String> {
             });
         }
     }
-    picker::select("Shows remote — commands", &choices)
+    choices
 }
 
 fn palette_command(model: &Model, action: &str) -> Option<Command> {
@@ -469,6 +489,9 @@ pub fn run(mut session: Session, target: &str, channel: &str, local: bool) -> Re
             if key.kind != KeyEventKind::Press {
                 continue;
             }
+            if model.info.take().is_some() {
+                continue;
+            }
             if matches!(key.code, KeyCode::Char('q') | KeyCode::Esc)
                 || (key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL))
             {
@@ -478,7 +501,7 @@ pub fn run(mut session: Session, target: &str, channel: &str, local: bool) -> Re
             let mut selected_command = None;
             if code == KeyCode::Char('/') {
                 ratatui::restore();
-                let selected = palette(&model);
+                let selected = picker::select("Shows remote — commands", &palette_choices(&model));
                 terminal = ratatui::try_init().map_err(|e| e.to_string())?;
                 terminal.clear().map_err(|e| e.to_string())?;
                 // A player may disconnect or change while fzt owns the terminal.
@@ -502,6 +525,10 @@ pub fn run(mut session: Session, target: &str, channel: &str, local: bool) -> Re
                     Ok(Some(action)) if action == "quit" => return Ok(false),
                     Ok(Some(action)) if action == "visualizer" => {
                         model.toggle_visualizer();
+                        continue;
+                    }
+                    Ok(Some(action)) if action == "info" => {
+                        model.info = Some(info::text());
                         continue;
                     }
                     Ok(Some(action)) if action == "reconnect" => {
@@ -638,6 +665,56 @@ mod tests {
         assert_eq!(palette_command(&model, "switch"), None);
         assert_eq!(palette_command(&model, "quit"), None);
         assert_eq!(palette_command(&model, "show:100"), None);
+    }
+
+    #[test]
+    fn info_stays_in_the_palette_whatever_the_connection_state() {
+        let mut model = Model::connecting(1);
+        model.disconnect("SSH refused".into());
+        let choices = palette_choices(&model);
+        let info = choices.iter().find(|c| c.id == "info").unwrap();
+        assert_eq!(info.name, "info");
+        assert_eq!(
+            info.description,
+            "Show this app's repo, build, install path and checkout"
+        );
+        assert_eq!(palette_command(&model, "info"), None);
+    }
+
+    #[test]
+    fn info_panel_replaces_the_screen_with_plain_lines_at_any_size() {
+        let mut model = Model::connecting(1);
+        model.status = json!({"round_pos":0,"round":[{"show_name":"Hidden round entry"}]});
+        model.info = Some(
+            "Shows remote info
+
+Repo       owner/name
+
+Any key closes this panel."
+                .into(),
+        );
+        for (width, height) in [(100, 30), (20, 8), (1, 1)] {
+            let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+            terminal.draw(|f| draw(f, &model, "upstairspc")).unwrap();
+            if width == 100 {
+                let rendered = format!("{:?}", terminal.backend().buffer());
+                assert!(rendered.contains("Repo       owner/name"));
+                assert!(rendered.contains("Any key closes this panel."));
+                assert!(!rendered.contains("Hidden round entry"));
+                assert!(!rendered.contains("Connection / result"));
+            }
+        }
+    }
+
+    #[test]
+    fn an_open_info_panel_stops_preview_reads_like_the_palette() {
+        let mut model = Model::connecting(1);
+        model.connected = true;
+        model.pending = None;
+        model.toggle_visualizer();
+        assert!(model.may_request_preview());
+        model.info = Some(String::new());
+        assert!(!model.may_request_preview());
     }
 
     #[test]

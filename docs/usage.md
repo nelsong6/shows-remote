@@ -15,11 +15,16 @@ instances first, and explains unavailable PCs. Select an instance to control it;
 
 Press `/` in the controller for its fzt command palette: playback controls,
 **Toggle fullscreen** on the controlled TV (`f` is the shortcut),
-play a show from the current round, reconnect, change instance, or quit.
+play a show from the current round, reconnect, change instance, **info**, or quit.
 Arrows select a show; Enter plays it. Space sets play/pause, `s` plays, `p` pauses,
 `n` skips **and marks watched**, `b` goes back, `d` defers without marking watched,
 left/right seek 10 seconds, and `+`/`-` change volume. `q` leaves Shows running;
 `r` reconnects after a disconnect.
+
+**info** shows this build's repo and link, its release and when it was built, the
+running executable's path, and its checkout under `D:\repos` if this PC has one.
+Drag to select text as usual; any key closes the panel. A local build says
+"development build, not from CI" for the values only CI can stamp.
 
 Press **v** or choose **Show ASCII video** in the palette to replace the round
 list with a live monochrome rendering of the target's video. Press **v** again
@@ -29,7 +34,7 @@ remain visible; choosing a show is still available through the palette.
 The visualizer samples the existing GPU video surface, downscales to 160×90
 before readback, and transfers at most four frames per second (about 60 KB/s
 before SSH overhead). It starts no decoder and saves no images. Turning it off,
-opening the palette, changing instance or quitting stops requests. Only one
+opening the palette or info panel, changing instance or quitting stops requests. Only one
 preview request is outstanding; failures back off and remain visible without
 disabling playback controls. Frames older than two seconds are hidden. A
 minimized or fully covered target window reports that its video is unavailable

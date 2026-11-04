@@ -32,7 +32,8 @@ network. Client and player release SHAs can differ while both implement protocol
 Windows and Linux CI run the client tests. Windows CI also checks installation,
 hash/signature rejection and version switching. Only main compiles an optimized
 Windows client, signs the executable and installer scripts, and publishes
-`remote-<sha>` with `shows-remote-windows-amd64.zip`.
+`remote-<sha>` with `shows-remote-windows-amd64.zip`. That build stamps the repo,
+link, commit and build time the palette's **info** panel shows.
 
 `scripts/publish.ps1 -WaitForRelease -InstallTargets local,upstairspc,treadmill`
 publishes that exact signed artifact to `\\NelsonNAS\files\shows-remote-app` and
