@@ -117,17 +117,26 @@ fn checkout(root: &Path, repo: Option<&str>) -> String {
     }
 }
 
+fn release(commit: Option<&str>) -> String {
+    present(commit).map_or(DEVELOPMENT.into(), |commit| {
+        format!("remote-{}", commit.get(..7).unwrap_or(commit))
+    })
+}
+
+/// The release tag, which is how the log names the build that wrote a line.
+pub fn version() -> String {
+    release(BUILD.commit)
+}
+
 fn panel(stamp: Stamp, now: i64, exe: io::Result<PathBuf>, repos: &Path, log: String) -> String {
     let repo = present(stamp.repo);
     let link = repo
         .zip(present(stamp.server))
         .map(|(repo, server)| format!("{}/{repo}", server.trim_end_matches('/')));
-    let version =
-        present(stamp.commit).map(|commit| format!("remote-{}", commit.get(..7).unwrap_or(commit)));
     let rows = [
         ("Repo", repo.unwrap_or(DEVELOPMENT).to_owned()),
         ("Link", link.unwrap_or_else(|| DEVELOPMENT.into())),
-        ("Version", version.unwrap_or_else(|| DEVELOPMENT.into())),
+        ("Version", release(stamp.commit)),
         ("Built", built(stamp.built, now)),
         ("Installed", installed(exe)),
         ("Checkout", checkout(repos, repo)),

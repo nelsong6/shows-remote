@@ -91,7 +91,7 @@ fn run() -> Result<(), String> {
     log::info(
         "start",
         &[
-            ("version", &version()),
+            ("version", &info::version()),
             ("mode", &mode),
             ("target", &args.target.as_deref().unwrap_or("-")),
             ("local", &args.local),

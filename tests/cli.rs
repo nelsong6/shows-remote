@@ -174,6 +174,7 @@ fn a_session_logs_the_target_what_was_sent_and_what_came_back() {
     .collect();
     assert!(positions[1] < positions[2], "{log}");
     assert!(log.contains("result=Paused"), "{log}");
+    assert!(log.contains("version=\"development build"), "{log}");
     assert!(log.contains("agent pid="), "{log}");
     assert!(log.contains("player-found address=127.0.0.1:"), "{log}");
     assert!(!log.contains("connection-lost"), "a clean exit: {log}");

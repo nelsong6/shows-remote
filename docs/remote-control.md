@@ -107,7 +107,8 @@ round. The target owns playback and all authoritative NAS transactions.
 
 - **L1. One file, in the pile.** Client and agent append to
   `%LOCALAPPDATA%\shows-remote\shows-remote.log` on their own PC, and log-ship
-  sends it to the pile (`log-search --app shows-remote`). A line starts with UTC
+  sends it to the pile (`log-search --app shows-remote`). `start` names the
+  `remote-<sha>` release. A line starts with UTC
   time to the millisecond, then level, `client` or `agent`, `pid=`, the event and
   `name=value` fields, so it reads by time beside that PC's `shows.log`. A remote
   session therefore has two halves: the client's on the PC you sat at, the agent's
