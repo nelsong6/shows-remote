@@ -28,8 +28,8 @@ Stable accepts only signed CI artifacts. The separate NAS channel is
 `\\NelsonNAS\files\shows-remote-app`; installation atomically switches a native
 executable hard link in a real channel directory (no junction on the SSH path).
 There is no runtime PowerShell wrapper. Preserve the command, at-menu entry, fzt
-palette, info panel, playback state, visible failures, bounded requests and child
-cleanup. The info panel's repo, link, version and build time come only from CI's
+palette, info panel, playback state, visible failures, bounded requests, child
+cleanup and the bounded, secret-free app log ([contract L1–L5](docs/remote-control.md)). The info panel's repo, link, version and build time come only from CI's
 build stamp ([contract C7](docs/remote-control.md)).
 
 The approved home Defender exclusion is limited to the current user's

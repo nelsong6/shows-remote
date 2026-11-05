@@ -23,6 +23,7 @@ left/right seek 10 seconds, and `+`/`-` change volume. `q` leaves Shows running;
 
 **info** shows this build's repo and link, its release and when it was built, the
 running executable's path, and its checkout under `D:\repos` if this PC has one.
+It also names the log, and says so if the log isn't being written.
 Drag to select text as usual; any key closes the panel. A local build says
 "development build, not from CI" for the values only CI can stamp.
 
@@ -39,6 +40,10 @@ preview request is outstanding; failures back off and remain visible without
 disabling playback controls. Frames older than two seconds are hidden. A
 minimized or fully covered target window reports that its video is unavailable
 rather than showing the stale surface from before it was hidden.
+
+Every session logs what it tried, sent and got back to
+`%LOCALAPPDATA%\shows-remote\shows-remote.log`. Read it from any PC with
+`log-search <words> --app shows-remote`; the target's half is under `--pc <target>`.
 
 ```powershell
 shows-remote upstairspc status

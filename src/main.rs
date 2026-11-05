@@ -9,7 +9,7 @@ mod ui;
 use clap::{Parser, Subcommand, ValueEnum};
 use serde_json::Value;
 use shows_control::{Command, resolve_show};
-use shows_remote::transport;
+use shows_remote::{log, transport};
 use std::io::IsTerminal;
 use transport::Session;
 
@@ -82,6 +82,21 @@ enum Action {
 
 fn run() -> Result<(), String> {
     let args = Args::parse();
+    log::open(if args.agent { "agent" } else { "client" });
+    let mode = match (&args.command, args.agent) {
+        (_, true) => "agent",
+        (Some(_), false) => "command",
+        (None, false) => "interactive",
+    };
+    log::info(
+        "start",
+        &[
+            ("version", &version()),
+            ("mode", &mode),
+            ("target", &args.target.as_deref().unwrap_or("-")),
+            ("local", &args.local),
+        ],
+    );
     if args.agent {
         return agent::run();
     }
@@ -217,8 +232,12 @@ fn print_status(status: &Value) {
 }
 
 fn main() {
-    if let Err(message) = run() {
-        eprintln!("shows-remote: {message}");
-        std::process::exit(1);
+    match run() {
+        Ok(()) => log::info("exit", &[]),
+        Err(message) => {
+            log::error("exit", &[("error", &message)]);
+            eprintln!("shows-remote: {message}");
+            std::process::exit(1);
+        }
     }
 }

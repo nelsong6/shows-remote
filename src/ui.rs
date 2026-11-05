@@ -17,8 +17,10 @@ use crate::{
     text,
     transport::{REQUEST_TIMEOUT, Session},
 };
+use shows_remote::log;
 
 struct Model {
+    target: String,
     status: Value,
     connected: bool,
     selected: usize,
@@ -35,6 +37,7 @@ struct Model {
 impl Model {
     fn connecting(id: u64) -> Self {
         Self {
+            target: String::new(),
             status: Value::Null,
             connected: false,
             selected: 0,
@@ -50,6 +53,17 @@ impl Model {
     }
 
     fn disconnect(&mut self, message: String) {
+        let unanswered = self
+            .pending
+            .map_or("none".to_owned(), |(id, _)| id.to_string());
+        log::warn(
+            "disconnected",
+            &[
+                ("target", &self.target),
+                ("unanswered", &unanswered),
+                ("reason", &message),
+            ],
+        );
         self.connected = false;
         self.pending = None;
         self.preview = None;
@@ -444,7 +458,10 @@ fn palette_command(model: &Model, action: &str) -> Option<Command> {
 /// True returns to instance selection; false quits the remote.
 pub fn run(mut session: Session, target: &str, channel: &str, local: bool) -> Result<bool, String> {
     let id = session.send(Command::Watch {})?;
-    let mut model = Model::connecting(id);
+    let mut model = Model {
+        target: target.to_owned(),
+        ..Model::connecting(id)
+    };
     let mut connection = Some(session);
     let mut started = Instant::now();
     let mut last_activity = Instant::now();
@@ -553,15 +570,18 @@ pub fn run(mut session: Session, target: &str, channel: &str, local: bool) -> Re
                     model.selected = model.selected.saturating_sub(1)
                 }
                 KeyCode::Char('r') if !model.connected => {
+                    log::info("reconnect", &[("target", &target)]);
                     connection.take();
                     match Session::connect(target, channel, local)
                         .and_then(|mut s| s.send(Command::Watch {}).map(|id| (s, id)))
                     {
                         Ok((session, id)) => {
                             connection = Some(session);
-                            let visualizer = model.visualizer;
-                            model = Model::connecting(id);
-                            model.visualizer = visualizer;
+                            model = Model {
+                                target: target.to_owned(),
+                                visualizer: model.visualizer,
+                                ..Model::connecting(id)
+                            };
                             started = Instant::now();
                             last_activity = Instant::now();
                         }
@@ -587,7 +607,21 @@ pub fn run(mut session: Session, target: &str, channel: &str, local: bool) -> Re
                         }
                     }
                 }
-                _ => (),
+                _ => {
+                    if let Some(command) = selected_command.or_else(|| model.control(code)) {
+                        let command = format!("{command:?}");
+                        log::info(
+                            "not-sent",
+                            &[
+                                ("target", &target),
+                                ("command", &command),
+                                ("connected", &model.connected),
+                                ("waiting", &model.pending.is_some()),
+                                ("phase", &text(&model.status["phase"])),
+                            ],
+                        );
+                    }
+                }
             }
         }
     })();

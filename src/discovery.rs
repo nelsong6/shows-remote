@@ -6,6 +6,7 @@ use crate::{
 };
 use serde_json::Value;
 use shows_control::Command;
+use shows_remote::log;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -110,6 +111,13 @@ pub fn choose(channel: &str) -> Result<Option<Target>, String> {
                 ),
                 Err(error) => format!("Unavailable: {}", unavailable(error)),
             };
+            match result {
+                Ok(_) => log::info("instance-available", &[("target", &target.host)]),
+                Err(error) => log::warn(
+                    "instance-unavailable",
+                    &[("target", &target.host), ("error", error)],
+                ),
+            }
             choices.push(Choice {
                 id: index.to_string(),
                 name: target.host.clone(),
@@ -139,6 +147,7 @@ pub fn choose(channel: &str) -> Result<Option<Target>, String> {
                     let (target, status) =
                         &results[index.parse::<usize>().map_err(|e| e.to_string())?];
                     if status.is_ok() {
+                        log::info("instance-chosen", &[("target", &target.host)]);
                         return Ok(Some(target.clone()));
                     }
                     // Keep unavailable PCs visible, without trying to control them.

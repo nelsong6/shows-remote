@@ -92,8 +92,9 @@ round. The target owns playback and all authoritative NAS transactions.
 - **C7. Info panel.** The palette's **info** action is always available and
   replaces the screen until any key, which only closes it. It lists Repo, Link,
   Version (the `remote-<sha>` release tag), Built (Pacific time and plain elapsed
-  language), Installed (`current_exe`) and Checkout (`D:\repos\<repo-name>` when
-  that folder has `.git`, else "no checkout on this PC"). CI stamps repo, link,
+  language), Installed (`current_exe`), Checkout (`D:\repos\<repo-name>` when
+  that folder has `.git`, else "no checkout on this PC") and Log (the app log's
+  path, and why it isn't writing if it isn't). CI stamps repo, link,
   commit and build time at compile time from `GITHUB_REPOSITORY`,
   `GITHUB_SERVER_URL`, `SHOWS_BUILD_SHA` and `SHOWS_BUILD_TIME`; none is typed into
   source. Each unstamped value reads "development build, not from CI", and
@@ -101,6 +102,41 @@ round. The target owns playback and all authoritative NAS transactions.
   the app requests no mouse reporting, so the terminal's normal selection gesture
   works while status arrives. Live status stays consumed behind the panel; preview
   reads stop, as they do for the palette.
+
+## Logging
+
+- **L1. One file, in the pile.** Client and agent append to
+  `%LOCALAPPDATA%\shows-remote\shows-remote.log` on their own PC, and log-ship
+  sends it to the pile (`log-search --app shows-remote`). A line starts with UTC
+  time to the millisecond, then level, `client` or `agent`, `pid=`, the event and
+  `name=value` fields, so it reads by time beside that PC's `shows.log`. A remote
+  session therefore has two halves: the client's on the PC you sat at, the agent's
+  on the target. `child=` on a `--local` connect is the agent's `pid=`.
+- **L2. What a failure leaves.** The client logs each instance it probed and why it
+  was unavailable (`instance-available`, `instance-unavailable`), the connection
+  (`connect`, `connect-failed`, `connection-lost` with SSH's stderr), each command
+  (`send`, then `reply`, `rejected` or `timeout`, by `id`, with milliseconds),
+  `closed` with how many requests went unanswered, and `disconnected` with the
+  reason the UI dropped. A key that sent nothing is `not-sent`, with why. `status`
+  logs playback state only when it changes, clock excluded, so a command that did
+  nothing shows as a `reply` with no `status` after it. The agent logs
+  `player-found` or `player-unavailable`, each `request` and its `reply` or
+  `rejected`, and `watch-ended`.
+- **L3. Bounded.** No line per status or heartbeat. Preview reads log only when
+  their outcome changes. A value stops at 1,024 characters. Past 4 MiB the file
+  rolls to `shows-remote.log.old`, replacing the last one; the listed name never
+  matches the old file, so the pile gets no line twice. Lines log-ship hadn't sent
+  when the file rolled are on this PC only.
+- **L4. Nothing secret.** A reply's body, the round, preview frames and SSH protocol
+  lines are never logged, only the summary fields above. The agent holds no keys;
+  it is a relay for bounded JSON commands. Every value is still treated as outside
+  text: private key blocks, long opaque strings, `name=value` secrets, URL
+  credentials and query strings are removed, and control characters can't start a
+  new line.
+- **L5. Never in the way.** Nothing goes to stdout or stderr: those belong to the
+  full-screen UI and the SSH protocol. A write that fails changes nothing about the
+  session and shows on the info panel's Log row. `SHOWS_REMOTE_LOG` names another
+  file for tests and isolated runs.
 
 ## Distribution and evidence
 

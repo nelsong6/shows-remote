@@ -4,6 +4,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use shows_remote::log::{self, civil_date};
+
 const DEVELOPMENT: &str = "development build, not from CI";
 const NO_CHECKOUT: &str = "no checkout on this PC";
 const REPOS: &str = r"D:\repos";
@@ -34,20 +36,6 @@ fn civil_days(year: i64, month: i64, day: i64) -> i64 {
     let day_of_year = (153 * ((month + 9) % 12) + 2) / 5 + day - 1;
     let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
     era * 146097 + day_of_era - 719468
-}
-
-/// (year, month, day) for a count of days since 1970-01-01.
-fn civil_date(days: i64) -> (i64, i64, i64) {
-    let days = days + 719468;
-    let era = days.div_euclid(146097);
-    let day_of_era = days.rem_euclid(146097);
-    let year_of_era =
-        (day_of_era - day_of_era / 1460 + day_of_era / 36524 - day_of_era / 146096) / 365;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let shifted_month = (5 * day_of_year + 2) / 153;
-    let month = (shifted_month + 2) % 12 + 1;
-    let year = year_of_era + era * 400 + i64::from(month <= 2);
-    (year, month, day_of_year - (153 * shifted_month + 2) / 5 + 1)
 }
 
 fn sunday_on_or_after(year: i64, month: i64, day: i64) -> i64 {
@@ -129,7 +117,7 @@ fn checkout(root: &Path, repo: Option<&str>) -> String {
     }
 }
 
-fn panel(stamp: Stamp, now: i64, exe: io::Result<PathBuf>, repos: &Path) -> String {
+fn panel(stamp: Stamp, now: i64, exe: io::Result<PathBuf>, repos: &Path, log: String) -> String {
     let repo = present(stamp.repo);
     let link = repo
         .zip(present(stamp.server))
@@ -143,6 +131,7 @@ fn panel(stamp: Stamp, now: i64, exe: io::Result<PathBuf>, repos: &Path) -> Stri
         ("Built", built(stamp.built, now)),
         ("Installed", installed(exe)),
         ("Checkout", checkout(repos, repo)),
+        ("Log", log),
     ];
     let mut text = String::from("Shows remote info\n\n");
     for (label, value) in rows {
@@ -157,7 +146,13 @@ pub fn text() -> String {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |since| since.as_secs() as i64);
-    panel(BUILD, now, std::env::current_exe(), Path::new(REPOS))
+    panel(
+        BUILD,
+        now,
+        std::env::current_exe(),
+        Path::new(REPOS),
+        log::status(),
+    )
 }
 
 #[cfg(test)]
@@ -177,6 +172,7 @@ mod tests {
         built: None,
     };
     const NOW: i64 = 1793661240 + 2 * 86400;
+    const LOG: &str = r"C:\apps\shows-remote.log (not writing: disk full)";
 
     fn line<'a>(text: &'a str, label: &str) -> &'a str {
         text.lines()
@@ -191,13 +187,14 @@ mod tests {
 
     #[test]
     fn a_ci_build_names_its_repo_link_release_and_age() {
-        let text = panel(STAMPED, NOW, exe(), Path::new("missing"));
+        let text = panel(STAMPED, NOW, exe(), Path::new("missing"), LOG.into());
         assert_eq!(line(&text, "Repo"), "nelsong6/shows-remote");
         assert_eq!(
             line(&text, "Link"),
             "https://forgejo.romaine.life/nelsong6/shows-remote"
         );
         assert_eq!(line(&text, "Version"), "remote-4daba4f");
+        assert_eq!(line(&text, "Log"), LOG);
         assert_eq!(line(&text, "Built"), "Nov 2, 3:14 PM Pacific (2 days ago)");
         assert_eq!(line(&text, "Installed"), r"C:\apps\shows-remote.exe");
     }
@@ -213,7 +210,7 @@ mod tests {
                 built: Some(""),
             },
         ] {
-            let text = panel(stamp, NOW, exe(), Path::new("missing"));
+            let text = panel(stamp, NOW, exe(), Path::new("missing"), LOG.into());
             for label in ["Repo", "Link", "Version", "Built"] {
                 assert_eq!(line(&text, label), DEVELOPMENT, "{label}");
             }
@@ -231,6 +228,7 @@ mod tests {
             NOW,
             exe(),
             Path::new("missing"),
+            LOG.into(),
         );
         assert_eq!(line(&text, "Repo"), "nelsong6/shows-remote");
         assert_eq!(line(&text, "Link"), DEVELOPMENT);
@@ -267,6 +265,7 @@ mod tests {
             NOW,
             Err(denied),
             Path::new("missing"),
+            LOG.into(),
         );
         assert_eq!(
             line(&text, "Built"),
