@@ -190,7 +190,7 @@ fn secret_name(name: &str) -> bool {
 
 /// A run this long with a digit in it is a key, token or digest, never a word or path.
 fn opaque(word: &str) -> bool {
-    word.split(|c: char| !(c.is_ascii_alphanumeric() || "+/=_-".contains(c)))
+    word.split(|c: char| !(c.is_ascii_alphanumeric() || "+/_-".contains(c)))
         .any(|run| run.len() >= 40 && run.contains(|c: char| c.is_ascii_digit()))
 }
 
@@ -328,6 +328,7 @@ mod tests {
             "Could not resolve hostname upstairspc: No such host is known.",
             "show_id: 3fa85f64-5717-4562-b3fc-2c963f66afa6",
             "Host key verification failed.",
+            "pos=44 show=boys episode=e16da8d4-4f87-45f2-8cdc-be33a3bb13fa alerts=",
             "http://127.0.0.1:45831/status",
         ] {
             assert_eq!(scrub(plain), plain);
