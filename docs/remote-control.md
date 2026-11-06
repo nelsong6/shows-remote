@@ -13,19 +13,21 @@ round. The target owns playback and all authoritative NAS transactions.
   Explicit CLI targets skip discovery; one-shot commands never silently choose
   a computer. The at-menu entry launches the generic app without a target.
 
-- **T1. HTTP stays local.** The desktop listens on `127.0.0.1:45831`.
-  `SHOWS_CONTROL_PORT` may select another nonzero port for isolated tests or a
-  configured installation; desktop and agent must agree. The native client
-  rejects non-loopback HTTP addresses and does not follow redirects.
-- **T2. Existing SSH access.** Windows OpenSSH uses batch authentication, strict
-  known-host verification, connect timeout and keepalives. Targets are computer
-  hostnames or SSH aliases, containing letters, digits, dots and hyphens, starting
+- **T1. Direct HTTP.** This PC's player answers on `127.0.0.1:45831`
+  (`SHOWS_CONTROL_PORT`). Another PC's answers on port 45832 (`SHOWS_REMOTE_PORT`), which
+  serves only the routes here. The client follows no redirects. Traffic is plain HTTP on
+  the home network: home-sync's firewall rule limits the port to the local subnet, a
+  token seen there is usable until it expires, and the remote takes the player's identity
+  from the home name and T4.
+- **T2. OpenBao sign-in.** Each request to another PC carries a token OpenBao signed for
+  this PC (role `shows`), from `romaine-auth home-token`, which logs in with the device
+  key. It lasts five minutes and is renewed when under 30 seconds remain, on the next
+  request, with no timer. The player checks it against OpenBao's published keys. An
+  unreachable OpenBao means no new connection; one already open keeps its status stream.
+  Targets are computer hostnames, containing letters, digits, dots and hyphens, starting
   with a letter or digit. Shows issues no credentials.
-- **T3. Commands are data.** The validated channel selects the independently
-  installed native `%LOCALAPPDATA%\shows-remote\channels\<channel>\shows-remote.exe --agent`
-  entry point. Commands travel as bounded JSON lines on SSH stdin, never
-  interpolated shell text. SSH starts the binary without a batch entry point,
-  PowerShell pipeline or NAS access, preserving protocol stdin/stdout and Unicode.
+- **T3. Commands are data.** Commands are typed JSON in HTTP request bodies, one at a
+  time, never interpolated shell text.
 - **T4. Identity precedes controls.** `GET /remote/info` must identify
   `shows-desktop` and protocol 1. A missing, stopped, or different listener fails
   explicitly. Every new connection checks identity.
@@ -39,7 +41,7 @@ round. The target owns playback and all authoritative NAS transactions.
 - **C0. Discoverable actions.** `/` opens the fzt command palette, advertised on
   screen. It provides playback and current-round show selection when controls
   are available, plus reconnect, change instance, info, and quit. Cancel executes
-  nothing. Switching closes the previous agent, leaves its player unchanged,
+  nothing. Switching closes the previous connection, leaves its player unchanged,
   and returns to instance selection. Status queued while the palette is open
   is consumed before another playback command is accepted.
   **Toggle fullscreen** (`f`) remains available while connected and idle even
@@ -64,17 +66,15 @@ round. The target owns playback and all authoritative NAS transactions.
   snapshot polling. Playback fields update only on target snapshots. Target
   alerts, waits, request failures and disconnects remain visible.
 - **C5. Disconnect disables controls.** Initial replies and commands time out
-  after 12 seconds. SSH keepalives detect broken peers. No status or SSE heartbeat
-  activity for 65 seconds disconnects the UI; idle SSE comments arrive every 30
-  seconds. `r` explicitly reconnects with a fresh agent and replays no command.
-  Quitting tears down the owned SSH child and leaves TV playback running.
+  after 12 seconds. No status or SSE heartbeat activity for 65 seconds disconnects
+  the UI; idle SSE comments arrive every 30 seconds. `r` explicitly reconnects and
+  replays no command. Quitting leaves TV playback running.
 
 - **C6. Opt-in video view.** `v` and the fzt palette switch between the round
   list and an ASCII video preview. The target alone reads its already-rendered
   GPU video surface, downscaling to 160×90 before CPU readback. No extra decoder,
   filesystem capture, NAS read or playback mutation is introduced. The native
-  loopback-only `GET /remote/preview` route rejects browser Origin headers;
-  the SSH agent carries a bounded `preview` read through the existing protocol.
+  `GET /remote/preview` route rejects browser Origin headers.
   Successful captures are shared across clients for 250 ms, and concurrent
   capture requests fail explicitly instead of queuing. The UI has at most one
   read outstanding, requests no more than four per second, backs off on errors,
@@ -105,37 +105,32 @@ round. The target owns playback and all authoritative NAS transactions.
 
 ## Logging
 
-- **L1. One file, in the pile.** Client and agent append to
-  `%LOCALAPPDATA%\shows-remote\shows-remote.log` on their own PC, and log-ship
-  sends it to the pile (`log-search --app shows-remote`). `start` names the
-  `remote-<sha>` release. A line starts with UTC
-  time to the millisecond, then level, `client` or `agent`, `pid=`, the event and
-  `name=value` fields, so it reads by time beside that PC's `shows.log`. A remote
-  session therefore has two halves: the client's on the PC you sat at, the agent's
-  on the target. `child=` on a `--local` connect is the agent's `pid=`.
+- **L1. One file, in the pile.** The client appends to
+  `%LOCALAPPDATA%\shows-remote\shows-remote.log` on its PC, and log-ship sends it to
+  the pile (`log-search --app shows-remote`). `start` names the `remote-<sha>` release.
+  A line starts with UTC time to the millisecond, then level, `client`, `pid=`, the
+  event and `name=value` fields, so it reads by time beside the target's `shows.log`.
 - **L2. What a failure leaves.** The client logs each instance it probed and why it
   was unavailable (`instance-available`, `instance-unavailable`), the connection
-  (`connect`, `connect-failed`, `connection-lost` with SSH's stderr), each command
+  (`connect`, `connect-failed`, `connection-lost`), its sign-in (`signed-in`,
+  `sign-in-failed`), each command
   (`send`, then `reply`, `rejected` or `timeout`, by `id`, with milliseconds),
   `closed` with how many requests went unanswered, and `disconnected` with the
   reason the UI dropped. A key that sent nothing is `not-sent`, with why. `status`
   logs playback state only when it changes, clock excluded, so a command that did
-  nothing shows as a `reply` with no `status` after it. The agent logs
-  `player-found` or `player-unavailable`, each `request` and its `reply` or
-  `rejected`, and `watch-ended`.
+  nothing shows as a `reply` with no `status` after it.
 - **L3. Bounded.** No line per status or heartbeat. Preview reads log only when
   their outcome changes. A value stops at 1,024 characters. Past 4 MiB the file
   rolls to `shows-remote.log.old`, replacing the last one; the listed name never
   matches the old file, so the pile gets no line twice. Lines log-ship hadn't sent
   when the file rolled are on this PC only.
-- **L4. Nothing secret.** A reply's body, the round, preview frames and SSH protocol
-  lines are never logged, only the summary fields above. The agent holds no keys;
-  it is a relay for bounded JSON commands. Every value is still treated as outside
+- **L4. Nothing secret.** A reply's body, the round, preview frames and tokens are
+  never logged, only the summary fields above. Every value is still treated as outside
   text: private key blocks, long opaque strings, `name=value` secrets, URL
   credentials and query strings are removed, and control characters can't start a
   new line.
 - **L5. Never in the way.** Nothing goes to stdout or stderr: those belong to the
-  full-screen UI and the SSH protocol. A write that fails changes nothing about the
+  full-screen UI. A write that fails changes nothing about the
   session and shows on the info panel's Log row. `SHOWS_REMOTE_LOG` names another
   file for tests and isolated runs.
 
@@ -143,8 +138,8 @@ round. The target owns playback and all authoritative NAS transactions.
 
 The executable has its own immutable, signed and hash-verified channel under
 `shows-remote-app`. The installer exposes its native binary through a local
-hard link in a real directory and adds it to PATH. The SSH path contains no
-directory junction. It never installs or restarts a player.
+hard link in a real directory and adds it to PATH. It never installs or restarts a
+player.
 The approved home Defender exception covers only the current user's remote
 installation folder, including staging and future versions. The separately
 invoked signed setup helper adds, checks or removes that exact folder entry;
@@ -158,6 +153,6 @@ desktop-owned `shows-control` crate, pinned by immutable Git revision in this
 repository; it requires matching protocol support, not matching release SHAs.
 
 The desktop's CI covers round/SQLite invariants, HTTP endpoints and the shared
-crate's SSE parsing. This CI covers CLI-to-agent subprocesses, terminal
+crate's SSE parsing. This CI covers the CLI against a fake player, terminal
 render/state behavior and independent channel installation. Cross-computer checks
 use released executables and restore playback state after play/pause checks.

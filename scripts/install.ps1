@@ -89,8 +89,7 @@ $selectedDir = Join-Path $versions $selectedVersion
 $exe = Join-Path $selectedDir "shows-remote.exe"
 if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "Installed executable is missing: $exe" }
 
-# SSH enforces RedirectionGuard on user-created directory junctions. A hard
-# link exposes the immutable executable without introducing a reparse point.
+# A hard link exposes the immutable executable without introducing a reparse point.
 $channels = [IO.Path]::GetFullPath((Join-Path $InstallRoot 'channels'))
 New-Item -ItemType Directory -Force -Path $channels | Out-Null
 $entryDir = Join-Path $channels $Channel

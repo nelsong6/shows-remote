@@ -456,7 +456,7 @@ fn palette_command(model: &Model, action: &str) -> Option<Command> {
 }
 
 /// True returns to instance selection; false quits the remote.
-pub fn run(mut session: Session, target: &str, channel: &str, local: bool) -> Result<bool, String> {
+pub fn run(mut session: Session, target: &str, local: bool) -> Result<bool, String> {
     let id = session.send(Command::Watch {})?;
     let mut model = Model {
         target: target.to_owned(),
@@ -572,7 +572,7 @@ pub fn run(mut session: Session, target: &str, channel: &str, local: bool) -> Re
                 KeyCode::Char('r') if !model.connected => {
                     log::info("reconnect", &[("target", &target)]);
                     connection.take();
-                    match Session::connect(target, channel, local)
+                    match Session::connect(target, local)
                         .and_then(|mut s| s.send(Command::Watch {}).map(|id| (s, id)))
                     {
                         Ok((session, id)) => {
@@ -704,7 +704,7 @@ mod tests {
     #[test]
     fn info_stays_in_the_palette_whatever_the_connection_state() {
         let mut model = Model::connecting(1);
-        model.disconnect("SSH refused".into());
+        model.disconnect("connection refused".into());
         let choices = palette_choices(&model);
         let info = choices.iter().find(|c| c.id == "info").unwrap();
         assert_eq!(info.name, "info");
@@ -774,14 +774,14 @@ Any key closes this panel."
     #[test]
     fn terminal_renders_target_failures_and_survives_small_resizes() {
         let mut model = Model::connecting(1);
-        model.disconnect("SSH refused".into());
+        model.disconnect("connection refused".into());
         for (width, height) in [(100, 24), (60, 15), (20, 5)] {
             let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
             terminal.draw(|f| draw(f, &model, "upstairspc")).unwrap();
             if width == 100 {
                 let rendered = format!("{:?}", terminal.backend().buffer());
                 assert!(rendered.contains("upstairspc"));
-                assert!(rendered.contains("SSH refused"));
+                assert!(rendered.contains("connection refused"));
             }
         }
     }

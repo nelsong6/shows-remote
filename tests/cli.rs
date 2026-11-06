@@ -51,7 +51,7 @@ fn identity() -> (&'static str, Value) {
 }
 
 #[test]
-fn local_agent_round_trip_prints_json_without_starting_a_player() {
+fn local_round_trip_prints_json_without_starting_a_player() {
     let output = run(
         &["status", "--json"],
         vec![
@@ -161,9 +161,8 @@ fn a_session_logs_the_target_what_was_sent_and_what_came_back() {
     }
     let positions: Vec<_> = [
         "client pid=",
-        "connect target=thispc via=local-agent",
+        "connect target=thispc via=local",
         "send target=thispc id=1 command=Pause",
-        "reply target=player id=1 command=Pause",
         "reply target=thispc id=1 command=Pause",
     ]
     .iter()
@@ -175,8 +174,7 @@ fn a_session_logs_the_target_what_was_sent_and_what_came_back() {
     assert!(positions[1] < positions[2], "{log}");
     assert!(log.contains("result=Paused"), "{log}");
     assert!(log.contains("version=\"development build"), "{log}");
-    assert!(log.contains("agent pid="), "{log}");
-    assert!(log.contains("player-found address=127.0.0.1:"), "{log}");
+    assert!(log.contains("address=127.0.0.1:"), "{log}");
     assert!(!log.contains("connection-lost"), "a clean exit: {log}");
     assert!(!log.contains("Hidden body"), "{log}");
 }
@@ -233,11 +231,7 @@ fn no_player_says_which_instance_was_tried_and_what_came_back() {
         .unwrap();
     assert!(!output.status.success());
     let log = std::fs::read_to_string(log).unwrap();
-    assert!(
-        log.contains("player-unavailable address=127.0.0.1:"),
-        "{log}"
-    );
-    assert!(log.contains("connection-lost target=thispc"), "{log}");
+    assert!(log.contains("connect-failed target=thispc"), "{log}");
 }
 
 #[test]
@@ -279,91 +273,19 @@ fn a_log_that_cannot_be_written_leaves_the_session_and_its_pipes_alone() {
     assert!(output.stderr.is_empty(), "{:?}", output.stderr);
 }
 
-#[cfg(windows)]
 #[test]
-fn installed_windows_agent_keeps_protocol_pipes_during_native_update() {
-    use std::io::Write;
-    use std::os::windows::process::CommandExt;
-    use std::process::Stdio;
-    let fixture = tempfile::tempdir().unwrap();
-    let local_data = fixture.path().join("Local data with spaces");
-    let root = local_data.join("shows-remote");
-    let version = root.join("channels").join("stable");
-    std::fs::create_dir_all(&version).unwrap();
-    let immutable = root.join("versions").join("first");
-    std::fs::create_dir_all(&immutable).unwrap();
-    let binary = immutable.join("shows-remote.exe");
-    std::fs::copy(env!("CARGO_BIN_EXE_shows-remote"), &binary).unwrap();
-    let entry = version.join("shows-remote.exe");
-    std::fs::hard_link(&binary, &entry).unwrap();
-    let server = Server::http("127.0.0.1:0").unwrap();
-    let port = server.server_addr().to_ip().unwrap().port();
-    let (ready_tx, ready_rx) = std::sync::mpsc::channel();
-    let worker = std::thread::spawn(move || {
-        for (index, value) in [
-            identity().1,
-            json!({"phase":"playing","message":"Télévision"}),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            server
-                .recv_timeout(Duration::from_secs(5))
-                .unwrap()
-                .expect("agent HTTP request")
-                .respond(Response::from_string(value.to_string()))
-                .unwrap();
-            if index == 0 {
-                ready_tx.send(()).unwrap();
-            }
-        }
-    });
-    let mut child = Command::new("cmd.exe")
-        .args(["/d", "/s", "/c"])
-        .raw_arg(format!(
-            "\"{}\"",
-            shows_remote::transport::remote_command("stable")
-        ))
-        .env("LOCALAPPDATA", &local_data)
-        .env_remove("SHOWS_REMOTE_LOG")
-        .env("SHOWS_CONTROL_PORT", port.to_string())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+fn a_target_on_another_pc_needs_a_sign_in_before_anything_is_sent() {
+    let folder = tempfile::tempdir().unwrap();
+    let log = folder.path().join("shows-remote.log");
+    let output = remote(&log)
+        .env("PATH", folder.path())
+        .env("SHOWS_REMOTE_PORT", "1")
+        .args(["127.0.0.1", "status"])
+        .output()
         .unwrap();
-    ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
-    let previous = version.join("previous.exe");
-    std::fs::rename(&entry, &previous).unwrap();
-    std::fs::hard_link(&binary, &entry).unwrap();
-    std::fs::remove_file(previous).unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(b"{\"id\":1,\"command\":{\"action\":\"status\"}}\n")
-        .unwrap();
-    let deadline = std::time::Instant::now() + Duration::from_secs(8);
-    while child.try_wait().unwrap().is_none() && std::time::Instant::now() < deadline {
-        std::thread::sleep(Duration::from_millis(20));
-    }
-    let timed_out = child.try_wait().unwrap().is_none();
-    if timed_out {
-        child.kill().unwrap();
-    }
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success() && !timed_out,
-        "timeout={timed_out}; stdout={}; stderr={}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    worker.join().unwrap();
-    let frame: shows_control::Frame = serde_json::from_slice(&output.stdout).unwrap();
-    assert!(
-        matches!(frame, shows_control::Frame::Reply { result: Ok(status), .. } if status["message"] == "Télévision")
-    );
-    let log = std::fs::read_to_string(root.join("shows-remote.log")).unwrap();
-    assert!(log.contains("agent pid="), "{log}");
-    assert!(log.contains("request id=1 command=Status"), "{log}");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("romaine-auth"), "{stderr}");
+    let log = std::fs::read_to_string(log).unwrap();
+    assert!(log.contains("connect-failed target=127.0.0.1"), "{log}");
 }

@@ -868,7 +868,7 @@ dependencies = [
 [[package]]
 name = "shows-control"
 version = "0.1.0"
-source = "git+https://github.com/nelsong6/shows.git?rev=86e7695862284da989e4c6740852071e6fdd9b02#86e7695862284da989e4c6740852071e6fdd9b02"
+source = "git+https://github.com/nelsong6/shows.git?rev=0670c7bacc8902b4b9acc429923c8f426086d096#0670c7bacc8902b4b9acc429923c8f426086d096"
 dependencies = [
  "serde",
  "serde_json",

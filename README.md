@@ -1,17 +1,16 @@
 # shows-remote
 
 Control an already running Shows player from a terminal. This repository owns
-the terminal UI, fzt instance picker and palette, CLI, SSH agent, builds and
-releases. The [Shows desktop](https://forgejo.romaine.life/nelsong6/shows) owns
+the terminal UI, fzt instance picker and palette, CLI, builds and releases. The [Shows desktop](https://forgejo.romaine.life/nelsong6/shows) owns
 playback, video capture and the authoritative NAS database.
 
 Run `shows-remote`, or **apps → shows remote** in the at menu. `/` opens commands;
 `v` switches between the playlist and live ASCII video. Quitting leaves the TV
 running. See [usage](docs/usage.md) and the [client contract](docs/remote-control.md).
 
-The target also needs the independent remote installed: SSH invokes its native
-`%LOCALAPPDATA%\shows-remote\channels\stable\shows-remote.exe --agent` entry point.
-No player, libmpv, database, shell wrapper or NAS media is part of this package.
+It reaches another PC's player directly on port 45832, signing in with a token OpenBao
+signs for this PC, so the target needs only the player. No player, libmpv, database,
+shell wrapper or NAS media is part of this package.
 
 ## Build and release
 
@@ -23,8 +22,7 @@ No player, libmpv, database, shell wrapper or NAS media is part of this package.
 ```
 
 Debug Cargo output stays warm in `D:\build\shows-remote\cargo` with at most four
-jobs. `--local` uses the freshly built agent; SSH uses the independently installed
-target agent. Protocol changes are checked against the desktop's `/remote/info`
+jobs. Protocol changes are checked against the desktop's `/remote/info`
 before controls. The desktop-owned `shows-control` crate is pinned by immutable
 Git revision; its GitHub mirror makes source builds possible away from the home
 network. Client and player release SHAs can differ while both implement protocol 1.
@@ -41,7 +39,7 @@ installs it in each interactive user session. Installation verifies hashes and
 the home Authenticode identity before atomically switching a native executable
 hard link in a real channel directory;
 Rejected binaries leave the selected client unchanged. It never restarts the player.
-There is no new service, identity, credential store or durable playback state.
+It adds no service, credential store or durable playback state.
 
 Home PCs use a persistent Defender exclusion limited to the current user's
 `%LOCALAPPDATA%\shows-remote` installation folder, approved because real-time
@@ -64,20 +62,6 @@ installation copies the ZIP there before extracting and verifying the signed
 executable. This avoids opening a flagged raw EXE on the share and needs no NAS
 exclusion. Archive size and contents are bounded and checked before extraction.
 The retired unpacked channel format is not accepted.
-
-Windows SSH enforces [RedirectionGuard](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-process-mitigation-redirection-trust-policy)
-for user-created directory junctions.
-The native channel path therefore contains a hard link to the immutable binary,
-with no reparse point to traverse. Updates replace directory entries rather
-than writing a running executable; connected agents keep running. The installer
-removes the initial junction layout. Before shipping installer changes, also run
-the distribution smoke in a real SSH session; a local CMD launch does not exercise
-that security context.
-`scripts/test-ssh-entry.ps1 -RemoteExe <physical-debug-executable>` enforces this
-check: it requires an SSH session with RedirectionGuard enabled, uses isolated
-temporary installs, subscribes to the already running local player's SSE feed,
-updates the native entry with that agent connected, and verifies another read.
-It never changes playback, the menu or the installed release channel.
 
 ## Source history
 

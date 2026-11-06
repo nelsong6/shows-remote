@@ -1,16 +1,14 @@
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::io::{BufReader, Write};
-use std::process::{Child, ChildStdin, Command as ProcessCommand, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use serde_json::Value;
-use shows_control::{Command, Frame, Request, read_line};
+use serde_json::{Value, json};
+use shows_control::{Client, Command, Frame};
 
-use crate::log;
+use crate::{log, token};
 
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(12);
 
@@ -21,13 +19,6 @@ pub fn valid_host(host: &str) -> bool {
         && host
             .bytes()
             .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'.')
-}
-
-pub fn remote_command(channel: &str) -> String {
-    assert!(matches!(channel, "stable" | "dev"));
-    // The independently verified channel exposes the binary directly. Neither
-    // JSON commands nor show names enter the remote command line.
-    format!(r#""%LOCALAPPDATA%\shows-remote\channels\{channel}\shows-remote.exe" --agent"#)
 }
 
 /// The playback fields worth a line when they change. The clock is left out: it moves
@@ -122,9 +113,10 @@ impl Replies {
 
 type Waiting = Arc<Mutex<HashMap<u64, (Command, Instant)>>>;
 
+/// One connection to a player: a worker runs commands in order, and a second thread
+/// follows the player's status stream once something asks to watch.
 pub struct Session {
-    child: Child,
-    input: ChildStdin,
+    requests: Sender<(u64, Command)>,
     pub events: Receiver<Frame>,
     next_id: u64,
     target: String,
@@ -132,146 +124,88 @@ pub struct Session {
     closing: Arc<AtomicBool>,
 }
 
+fn opened(host: &str, local: bool) -> Result<(Client, String), String> {
+    if local {
+        let address = shows_control::control_addr()?;
+        return Ok((Client::connect()?, address));
+    }
+    let address = format!("{host}:{}", shows_control::remote_port()?);
+    Ok((Client::connect_remote(&address, token::source())?, address))
+}
+
+/// Follows the status stream until it ends or nobody is listening.
+fn watch(client: Client, target: String, events: SyncSender<Frame>, closing: Arc<AtomicBool>) {
+    let mut state = String::new();
+    let forwarded = events.clone();
+    let ended = client.watch(|frame| {
+        if let Frame::Status { status } = &frame {
+            let now = playback_state(status);
+            if now != state {
+                log::info("status", &[("target", &target), ("state", &now)]);
+                state = now;
+            }
+        }
+        forwarded.send(frame).map_err(|e| e.to_string())
+    });
+    if let Err(message) = ended {
+        if !closing.load(Ordering::Relaxed) {
+            log::warn("connection-lost", &[("target", &target), ("message", &message)]);
+            let _ = events.send(Frame::Disconnected { message });
+        }
+    }
+}
+
 impl Session {
-    pub fn connect(host: &str, channel: &str, local: bool) -> Result<Self, String> {
+    pub fn connect(host: &str, local: bool) -> Result<Self, String> {
         if !valid_host(host) {
             log::warn("connect-refused", &[("target", &host)]);
-            return Err("target must be a computer hostname or SSH host alias".into());
+            return Err("target must be a computer hostname".into());
         }
-        let mut command = if local {
-            let mut cmd = ProcessCommand::new(std::env::current_exe().map_err(|e| e.to_string())?);
-            cmd.arg("--agent");
-            cmd
-        } else {
-            let mut cmd = ProcessCommand::new("ssh.exe");
-            cmd.args([
-                "-T",
-                "-o",
-                "BatchMode=yes",
-                "-o",
-                "StrictHostKeyChecking=yes",
-                "-o",
-                "ConnectTimeout=8",
-                "-o",
-                "ServerAliveInterval=5",
-                "-o",
-                "ServerAliveCountMax=2",
-                host,
-                &remote_command(channel),
-            ]);
-            cmd
-        };
-        let mut child = command
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| {
-                let message = format!(
-                    "could not start {}: {e}",
-                    if local {
-                        "local agent"
-                    } else {
-                        "Windows OpenSSH"
-                    }
-                );
-                log::error("connect-failed", &[("target", &host), ("error", &message)]);
-                message
-            })?;
+        let (client, address) = opened(host, local).inspect_err(|error| {
+            log::warn("connect-failed", &[("target", &host), ("error", error)]);
+        })?;
         log::info(
             "connect",
             &[
                 ("target", &host),
-                ("via", &if local { "local-agent" } else { "ssh" }),
-                ("channel", &channel),
-                ("child", &child.id()),
+                ("via", &if local { "local" } else { "network" }),
+                ("address", &address),
             ],
         );
-        let input = child.stdin.take().unwrap();
-        let output = child.stdout.take().unwrap();
-        let errors = child.stderr.take().unwrap();
+        let (requests, queue) = mpsc::channel::<(u64, Command)>();
         let (tx, events) = mpsc::sync_channel(32);
-        let diagnostics = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
-        let capture = diagnostics.clone();
         let waiting: Waiting = Arc::default();
         let closing = Arc::new(AtomicBool::new(false));
         let target = host.to_owned();
         let (answered, closed) = (waiting.clone(), closing.clone());
         std::thread::spawn(move || {
-            let mut reader = BufReader::new(errors);
-            while let Ok(Some(line)) = read_line(&mut reader) {
-                let mut text = capture.lock().unwrap();
-                if text.len() < 8192 {
-                    text.push_str(&line);
-                }
-            }
-        });
-        std::thread::spawn(move || {
-            let mut reader = BufReader::new(output);
             let mut replies = Replies::new(&target);
-            let mut state = String::new();
-            let result = loop {
-                match read_line(&mut reader) {
-                    Ok(Some(line)) => match serde_json::from_str(&line) {
-                        Ok(frame) => {
-                            match &frame {
-                                Frame::Reply { id, result } => {
-                                    let sent = answered.lock().unwrap().remove(id);
-                                    match sent {
-                                        Some((command, began)) => {
-                                            replies.logged(*id, &command, began, result)
-                                        }
-                                        None => log::warn(
-                                            "unexpected-reply",
-                                            &[("target", &target), ("id", id)],
-                                        ),
-                                    }
-                                }
-                                Frame::Status { status } => {
-                                    let now = playback_state(status);
-                                    if now != state {
-                                        log::info(
-                                            "status",
-                                            &[("target", &target), ("state", &now)],
-                                        );
-                                        state = now;
-                                    }
-                                }
-                                Frame::Disconnected { message } => log::warn(
-                                    "player-lost",
-                                    &[("target", &target), ("message", message)],
-                                ),
-                                Frame::Heartbeat => (),
-                            }
-                            if tx.send(frame).is_err() {
-                                return;
-                            }
-                        }
-                        Err(e) => break format!("invalid remote protocol message: {e}"),
-                    },
-                    Ok(None) => break "remote connection closed".to_string(),
-                    Err(e) => break e,
+            let mut watching = false;
+            while let Ok((id, command)) = queue.recv() {
+                let result = if command == (Command::Watch {}) {
+                    if watching {
+                        Err("already watching".to_string())
+                    } else {
+                        watching = true;
+                        let (client, target, events, closing) =
+                            (client.clone(), target.clone(), tx.clone(), closed.clone());
+                        std::thread::spawn(move || watch(client, target, events, closing));
+                        Ok(json!({"message": "subscribed to the target's live status"}))
+                    }
+                } else {
+                    client.execute(&command)
+                };
+                match answered.lock().unwrap().remove(&id) {
+                    Some((command, began)) => replies.logged(id, &command, began, &result),
+                    None => log::warn("unexpected-reply", &[("target", &target), ("id", &id)]),
                 }
-            };
-            // stderr may finish just after stdout; give its reader a bounded chance.
-            std::thread::sleep(Duration::from_millis(50));
-            let details = diagnostics.lock().unwrap().trim().to_string();
-            let message = if details.is_empty() {
-                result
-            } else {
-                format!("{result}: {details}")
-            };
-            if !closed.load(Ordering::Relaxed) {
-                log::warn(
-                    "connection-lost",
-                    &[("target", &target), ("message", &message)],
-                );
+                if tx.send(Frame::Reply { id, result }).is_err() {
+                    return;
+                }
             }
-            let _ = tx.send(Frame::Disconnected { message });
         });
         Ok(Self {
-            child,
-            input,
+            requests,
             events,
             next_id: 0,
             target: host.to_owned(),
@@ -295,28 +229,21 @@ impl Session {
             .lock()
             .unwrap()
             .insert(id, (command.clone(), Instant::now()));
-        let request = Request { id, command };
-        self.write(&request).inspect_err(|error| {
+        self.requests.send((id, command)).map_err(|_| {
             self.waiting.lock().unwrap().remove(&id);
+            let error = "the connection to the player has closed".to_string();
             log::warn(
                 "send-failed",
                 &[
                     ("target", &self.target),
                     ("id", &id),
                     ("command", &label),
-                    ("error", error),
+                    ("error", &error),
                 ],
             );
+            error
         })?;
         Ok(id)
-    }
-
-    fn write(&mut self, request: &Request) -> Result<(), String> {
-        serde_json::to_writer(&mut self.input, request).map_err(|e| e.to_string())?;
-        self.input
-            .write_all(b"\n")
-            .and_then(|_| self.input.flush())
-            .map_err(|e| e.to_string())
     }
 
     pub fn call(&mut self, command: Command) -> Result<Value, String> {
@@ -348,8 +275,6 @@ impl Drop for Session {
             "closed",
             &[("target", &self.target), ("unanswered", &unanswered)],
         );
-        let _ = self.child.kill();
-        let _ = self.child.wait();
     }
 }
 

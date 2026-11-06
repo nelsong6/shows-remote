@@ -18,19 +18,19 @@ pub struct Target {
 fn unavailable(error: &str) -> &str {
     if error.contains("Shows is not available") {
         "Open Shows on this PC"
-    } else if error.contains("Permission denied") || error.contains("Host key verification failed")
-    {
-        "Existing SSH access needs setup"
-    } else if error.contains("cannot find the path") || error.contains("not recognized") {
-        "Install Shows remote on this PC to enable its SSH agent"
-    } else if error.contains("timed out")
-        || error.contains("Could not resolve hostname")
-        || error.contains("No route")
-        || error.contains("refused")
-    {
-        "PC is unreachable or SSH is not running"
+    } else if error.contains("Shows refused this remote") || error.contains("OpenBao") {
+        error
     } else if error.contains("compatible Shows") {
         "The player and remote must support the same control protocol"
+    } else if error.contains("refused") {
+        "Shows isn't open on that PC, or it needs the current release"
+    } else if error.contains("timed out")
+        || error.contains("timeout")
+        || error.contains("resolve")
+        || error.contains("No route")
+        || error.contains("unreachable")
+    {
+        "PC is off or unreachable"
     } else {
         error
     }
@@ -78,7 +78,7 @@ fn inventory() -> Result<Vec<Target>, String> {
     targets(&value, &std::env::var("COMPUTERNAME").unwrap_or_default())
 }
 
-pub fn choose(channel: &str) -> Result<Option<Target>, String> {
+pub fn choose() -> Result<Option<Target>, String> {
     picker::executable()?;
     loop {
         println!("Looking for running Shows instances…");
@@ -86,9 +86,8 @@ pub fn choose(channel: &str) -> Result<Option<Target>, String> {
         let (tx, rx) = std::sync::mpsc::channel();
         for target in candidates.iter().cloned() {
             let tx = tx.clone();
-            let channel = channel.to_owned();
             std::thread::spawn(move || {
-                let result = Session::connect(&target.host, &channel, target.local)
+                let result = Session::connect(&target.host, target.local)
                     .and_then(|mut session| session.call(Command::Status {}));
                 let _ = tx.send((target, result));
             });
@@ -162,7 +161,7 @@ mod tests {
     use super::*;
     use serde_json::json;
     #[test]
-    fn inventory_includes_every_pc_and_identifies_self_without_ssh() {
+    fn inventory_includes_every_pc_and_identifies_self() {
         let found = targets(
             &json!({"machines":{"livingroom":{"computer":"TV"},"desk":{"computer":"DESK"}}}),
             "desk",

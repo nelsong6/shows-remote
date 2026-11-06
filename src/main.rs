@@ -1,43 +1,32 @@
 #![forbid(unsafe_code)]
 
-mod agent;
 mod discovery;
 mod info;
 mod picker;
 mod ui;
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 use serde_json::Value;
 use shows_control::{Command, resolve_show};
 use shows_remote::{log, transport};
 use std::io::IsTerminal;
 use transport::Session;
 
-#[derive(Clone, Copy, ValueEnum)]
-enum Channel {
-    Stable,
-    Dev,
-}
-
 #[derive(Parser)]
 #[command(
     version = version(),
-    about = "Control a running Shows desktop over your existing SSH connection.",
+    about = "Control a running Shows desktop on this PC or another home PC.",
     after_help = "Examples:\n  shows-remote\n  shows-remote upstairspc play\n  shows-remote upstairspc play \"The Simpsons\"\n  shows-remote upstairspc status --json\n\nNo arguments opens the instance picker. The target must already have Shows open."
 )]
 struct Args {
     target: Option<String>,
-    #[arg(long, value_enum, default_value = "stable", global = true)]
-    channel: Channel,
     #[arg(
         long,
         global = true,
         help = "Print the result as JSON (requires a command)"
     )]
     json: bool,
-    #[arg(long, hide = true)]
-    agent: bool,
-    #[arg(long, help = "Control Shows on this PC without SSH")]
+    #[arg(long, help = "Control Shows on this PC")]
     local: bool,
     #[command(subcommand)]
     command: Option<Action>,
@@ -82,12 +71,8 @@ enum Action {
 
 fn run() -> Result<(), String> {
     let args = Args::parse();
-    log::open(if args.agent { "agent" } else { "client" });
-    let mode = match (&args.command, args.agent) {
-        (_, true) => "agent",
-        (Some(_), false) => "command",
-        (None, false) => "interactive",
-    };
+    log::open("client");
+    let mode = if args.command.is_some() { "command" } else { "interactive" };
     log::info(
         "start",
         &[
@@ -97,18 +82,11 @@ fn run() -> Result<(), String> {
             ("local", &args.local),
         ],
     );
-    if args.agent {
-        return agent::run();
-    }
     if args.command.is_none()
         && (args.json || !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal())
     {
         return Err("The interactive remote needs a terminal. Use a command such as status --json for scripts.".into());
     }
-    let channel = match args.channel {
-        Channel::Stable => "stable",
-        Channel::Dev => "dev",
-    };
     if args.command.is_none() {
         crossterm::execute!(std::io::stdout(), crossterm::terminal::SetTitle("Shows remote"))
             .map_err(|e| format!("Could not set the Shows remote window title: {e}"))?;
@@ -125,20 +103,20 @@ fn run() -> Result<(), String> {
         loop {
             let selected = match target.take() {
                 Some(target) => Some(target),
-                None => discovery::choose(channel)?,
+                None => discovery::choose()?,
             };
             let Some(selected) = selected else {
                 return Ok(());
             };
-            let session = Session::connect(&selected.host, channel, selected.local)?;
-            if !ui::run(session, &selected.host, channel, selected.local)? {
+            let session = Session::connect(&selected.host, selected.local)?;
+            if !ui::run(session, &selected.host, selected.local)? {
                 return Ok(());
             }
         }
     }
     let target = args.target.as_deref().or(if args.local { Some("local") } else { None })
         .ok_or("Commands require a target: shows-remote <computer> status. Run shows-remote with no arguments to choose an instance.")?;
-    let mut session = Session::connect(target, channel, args.local)?;
+    let mut session = Session::connect(target, args.local)?;
     let Some(action) = args.command else {
         unreachable!();
     };

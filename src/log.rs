@@ -1,10 +1,10 @@
 //! The app log: one plain line per event, in a file log-ship sends to the pile
 //! (at-home-tools `docs/app-logs.md`). Each line starts with UTC time, so it reads
-//! beside the player's `shows.log`. Client and agent are separate processes sharing
+//! beside the player's `shows.log`.
 //! the file, so a line is one append with the file closed after it.
 //!
 //! Nothing here reaches a terminal or a pipe: stdout and stderr belong to the
-//! full-screen UI and, for the agent, to the SSH protocol. A write that fails is
+//! full-screen UI. A write that fails is
 //! reported by the info panel instead.
 use std::fmt::Display;
 use std::fs::{self, OpenOptions};
@@ -15,7 +15,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Matches log-ship's 4 MiB first-sight backfill, so a PC's whole file reaches the pile.
 const ROLL_AT: u64 = 4 * 1024 * 1024;
-/// Long enough for SSH's post-quantum warning and the real failure after it.
+/// Long enough for a failure's whole message.
 const MAX_VALUE: usize = 1024;
 const REMOVED: &str = "[removed]";
 const SECRET_NAMES: [&str; 13] = [
@@ -202,7 +202,7 @@ fn without_url_secrets(word: &str) -> Option<String> {
     Some(format!("{scheme}://{host}{path}"))
 }
 
-/// Every logged value is outside text at heart (SSH's stderr, a player's error, a show
+/// Every logged value is outside text at heart (a player's error, a show
 /// name), so each becomes one line with anything shaped like a secret taken out.
 fn scrub(text: &str) -> String {
     let (text, key_block) = match text.find("-----BEGIN") {
