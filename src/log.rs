@@ -1,11 +1,9 @@
 //! The app log: one plain line per event, in a file log-ship sends to the pile
 //! (at-home-tools `docs/app-logs.md`). Each line starts with UTC time, so it reads
-//! beside the player's `shows.log`.
-//! the file, so a line is one append with the file closed after it.
+//! beside the player's `shows.log`. A line is one append with the file closed after it.
 //!
 //! Nothing here reaches a terminal or a pipe: stdout and stderr belong to the
-//! full-screen UI. A write that fails is
-//! reported by the info panel instead.
+//! full-screen UI. A write that fails is reported by the info panel instead.
 use std::fmt::Display;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
