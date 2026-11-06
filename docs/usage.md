@@ -97,7 +97,7 @@ PCs connect to the player's network port, 45832. Discovery probes concurrently a
 uses the normal bounded status request.
 
 Each home PC signs in with its own key: `romaine-auth home-token` logs in to OpenBao and
-saves a five-minute token, which the remote renews when it's nearly spent. A PC needs a
+saves a five-minute token, which an open remote replaces before it runs out. A PC needs a
 login in `nelsong6/openbao` with the `shows-token` policy. home-sync opens the port to
 the local subnet. Traffic is plain HTTP on the home network. The loopback port is 45831;
 leave `SHOWS_CONTROL_PORT` and `SHOWS_REMOTE_PORT` unset normally.

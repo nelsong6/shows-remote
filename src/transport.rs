@@ -134,10 +134,19 @@ fn opened(host: &str, local: bool) -> Result<(Client, String), String> {
 }
 
 /// Follows the status stream until it ends or nobody is listening.
-fn watch(client: Client, target: String, events: SyncSender<Frame>, closing: Arc<AtomicBool>) {
+fn watch(
+    client: Client,
+    target: String,
+    local: bool,
+    events: SyncSender<Frame>,
+    closing: Arc<AtomicBool>,
+) {
     let mut state = String::new();
     let forwarded = events.clone();
     let ended = client.watch(|frame| {
+        if !local {
+            token::renew_ahead();
+        }
         if let Frame::Status { status } = &frame {
             let now = playback_state(status);
             if now != state {
@@ -189,7 +198,7 @@ impl Session {
                         watching = true;
                         let (client, target, events, closing) =
                             (client.clone(), target.clone(), tx.clone(), closed.clone());
-                        std::thread::spawn(move || watch(client, target, events, closing));
+                        std::thread::spawn(move || watch(client, target, local, events, closing));
                         Ok(json!({"message": "subscribed to the target's live status"}))
                     }
                 } else {

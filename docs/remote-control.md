@@ -21,9 +21,12 @@ round. The target owns playback and all authoritative NAS transactions.
   from the home name and T4.
 - **T2. OpenBao sign-in.** Each request to another PC carries a token OpenBao signed for
   this PC (role `shows`), from `romaine-auth home-token`, which logs in with the device
-  key. It lasts five minutes and is renewed when under 30 seconds remain, on the next
-  request, with no timer. The player checks it against OpenBao's published keys. An
-  unreachable OpenBao means no new connection; one already open keeps its status stream.
+  key. It lasts five minutes. While a status stream is open, the stream's frames replace
+  it in the background once under 90 seconds remain, so no command or preview waits on a
+  sign-in; that is one `romaine-auth` run about every three and a half minutes while a
+  remote is open. A request with under 30 seconds left signs in and waits. There is no
+  timer. The player checks it against OpenBao's published keys. An unreachable OpenBao
+  means no new connection; one already open keeps its status stream.
   Targets are computer hostnames, containing letters, digits, dots and hyphens, starting
   with a letter or digit. Shows issues no credentials.
 - **T3. Commands are data.** Commands are typed JSON in HTTP request bodies, one at a
