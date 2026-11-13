@@ -23,8 +23,10 @@ shell wrapper or NAS media is part of this package.
 Debug Cargo output stays warm in `D:\build\shows-remote\cargo` with at most four
 jobs. Protocol changes are checked against the desktop's `/remote/info`
 before controls. The desktop-owned `shows-control` crate is pinned by immutable
-Git revision; its GitHub mirror makes source builds possible away from the home
-network. Client and player release SHAs can differ while both implement protocol 1.
+Git revision and read from Forgejo's `nelsong6/shows` with the git CLI
+(`.cargo/config.toml`), signed in by git's credential helper here and by
+`PIPELINE_DISPATCH_TOKEN` in CI (FORGEJO-29); Forgejo answers only on the home
+network, so a source build needs it. Client and player release SHAs can differ while both implement protocol 1.
 
 Windows and Linux CI run the client tests, and Windows CI signs every build. Only
 main compiles an optimized Windows client, stamping the repo, link, commit and build
