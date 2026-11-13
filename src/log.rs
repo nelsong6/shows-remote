@@ -322,7 +322,7 @@ mod tests {
     fn what_a_failure_needs_survives_scrubbing() {
         for plain in [
             "Permission denied (publickey,password,keyboard-interactive).",
-            r"C:\Users\Nelson\AppData\Local\shows-remote\channels\stable\shows-remote.exe",
+            r"C:\Program Files\at-home\shows-remote\current\shows-remote.exe",
             "Could not resolve hostname upstairspc: No such host is known.",
             "show_id: 3fa85f64-5717-4562-b3fc-2c963f66afa6",
             "Host key verification failed.",

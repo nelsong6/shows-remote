@@ -139,23 +139,17 @@ round. The target owns playback and all authoritative NAS transactions.
 
 ## Distribution and evidence
 
-The executable has its own immutable, signed and hash-verified channel under
-`shows-remote-app`. The installer exposes its native binary through a local
-hard link in a real directory and adds it to PATH. It never installs or restarts a
-player.
-The approved home Defender exception covers only the current user's remote
-installation folder, including staging and future versions. The separately
-invoked signed setup helper adds, checks or removes that exact folder entry;
-normal updates do not change policy. Unrelated exclusions and protection features
-remain unchanged, and signature/hash verification remains mandatory.
-Channel schema 2 transfers a bounded, hash-verified executable-only ZIP from the
-NAS and extracts it inside the local app folder before signer/hash checks. No raw
-EXE is opened on the share; no NAS or publisher-temp-directory exclusion is needed.
-The at-menu launches that binary directly. Protocol 1 is defined by the
+Each release from main is one immutable, at-terminal-signed executable,
+`shows-remote-windows-amd64.exe` on Forgejo release `remote-<sha>`. home-sync installs
+it as a managed tool in `C:\Program Files\at-home\shows-remote\<tag>`, checking the
+signature before switching the `current` junction, and the at menu's
+`system:shows-remote tool:shows-remote` launches that program directly, in one window
+in the `system` session. Installing it never installs or
+restarts a player. Protocol 1 is defined by the
 desktop-owned `shows-control` crate, pinned by immutable Git revision in this
 repository; it requires matching protocol support, not matching release SHAs.
 
 The desktop's CI covers round/SQLite invariants, HTTP endpoints and the shared
 crate's SSE parsing. This CI covers the CLI against a fake player, terminal
-render/state behavior and independent channel installation. Cross-computer checks
+render/state behavior and the release's signature. Cross-computer checks
 use released executables and restore playback state after play/pause checks.

@@ -20,23 +20,22 @@ Use at most four local Cargo jobs and keep debug builds warm in
 `scripts/dev.ps1 run upstairspc status --json` tries the debug client against that PC's
 player. `--local` exercises it against a local player.
 
-CI validates Windows and Linux clients; main builds a signed Windows release
-without compiling the desktop or fetching libmpv. Publish and install that exact
-release with `scripts/publish.ps1 -WaitForRelease -InstallTargets local,upstairspc,treadmill`.
-Stable accepts only signed CI artifacts. The separate NAS channel is
-`\\NelsonNAS\files\shows-remote-app`; installation atomically switches a native
-executable hard link in a real channel directory.
+CI validates Windows and Linux clients; main builds, stamps and signs the Windows
+release without compiling the desktop or fetching libmpv, drafts `remote-<sha>` with
+`shows-remote-windows-amd64.exe`, and pipeline-templates' home-sync workflow publishes it
+and starts home-sync on every PC. home-sync installs it under
+`C:\Program Files\at-home\shows-remote\<tag>` behind the `current` junction, after
+checking the at-terminal signature; the at menu's `system:shows-remote tool:shows-remote` runs it
+in one window in the `system` session. The
+retired per-user channel installer, NAS channel and its `%LOCALAPPDATA%` Defender rule
+stay retired: home-sync's `C:\Program Files\at-home` exclusion covers this app as it
+does every managed tool (HOMECFG-130). Never install a local build as a release.
 There is no runtime PowerShell wrapper. Preserve the command, at-menu entry, fzt
 palette, info panel, playback state, visible failures, bounded requests, child
 cleanup and the bounded, secret-free app log ([contract L1–L5](docs/remote-control.md)). The info panel's repo, link, version and build time come only from CI's
 build stamp ([contract C7](docs/remote-control.md)).
 
-The approved home Defender exclusion is limited to the current user's
-`%LOCALAPPDATA%\shows-remote` folder. The signed `scripts/configure-defender.ps1`
-checks it by default; explicit elevated Apply/Remove changes only that exact
-entry. Keep normal installs free of implicit antivirus policy changes, preserve
-other exclusions/protection features and require signer/hash verification.
-Channel schema 2 transports an executable-only ZIP; copy it into the local app
-folder before extraction and verify archive metadata, the exact entry and the
-signed executable. Publish downloads/packages inside that app folder too. Do not
-restore unpacked NAS executables or add NAS/source/build-folder exclusions.
+Read [TESTING.md](TESTING.md) before verifying a change or updating the remote Nelson
+has open. Never point a test at one of his players: use the fake player and isolated
+server it describes. A behavior change is finished when his open window runs the new
+release.

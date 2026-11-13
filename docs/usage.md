@@ -67,23 +67,14 @@ command may already have applied; inspect status before retrying.
 
 ## Installation
 
-Publish the independent CI release using
-`scripts/publish.ps1 -WaitForRelease -InstallTargets local,upstairspc,treadmill`.
-Its signed installer verifies and installs the selected client, exposes a native
-executable hard link under `%LOCALAPPDATA%\shows-remote\channels\stable`, and adds it
-to user PATH. Setup and update
-scripts maintain this path; opening the remote runs the binary directly with
-no PowerShell or batch wrapper. Publishing with installation targets updates
-the selected version; the remote does not check for updates on every opening.
-
-Home setup also applies the signed `configure-defender.ps1 -Action Apply` once,
-elevated as the same Windows user. It excludes only that user's
-`%LOCALAPPDATA%\shows-remote` folder from Defender scanning, covering future
-versions and staging. Everything placed there is excluded; installation still
-verifies its pinned signer and hashes. `-Action Check` reads the rule and protection
-state, and `-Action Remove` reverses it without changing other exclusions. The
-installer does not add this exception implicitly. Defender's other protections
-remain enabled.
+home-sync installs each signed release from main on every home PC, at
+`C:\Program Files\at-home\shows-remote\current\shows-remote.exe`, and puts that
+folder on PATH. The at menu runs it as `system:shows-remote tool:shows-remote`, one window in the
+`system` session that relaunches on exit, directly, with no
+PowerShell or batch wrapper. A release reaches every PC without anyone running an
+installer; the remote does not check for updates on every opening. Defender skips
+that folder through home-sync's exclusion for every managed tool, and home-sync
+refuses a release not signed by the at-terminal certificate.
 
 The instance picker and command palette use the managed fzt executable at
 `%ProgramFiles%\at-home\fzt\current\fzt.exe`, installed by home-sync. A missing
@@ -108,7 +99,7 @@ library, history, playback state or secrets.
 ## Home-service checklist applicability
 
 - Tickets, source, CI and releases belong to the independent shows-remote project.
-- Installation uses its own signed, hash-verified channel, with no desktop bundle.
+- Installation is home-sync's signed managed-tool release, with no desktop bundle.
 - Sign-in is the PC's OpenBao login. No new hosted service, browser login, identity
   issuer, secret store, DNS record, TLS listener or homepage URL is introduced.
 - No new durable business state needs backup; the NAS database stays authoritative.
