@@ -93,3 +93,6 @@ jobs:
           foreach ($asset in @($release.assets)) { Invoke-RestMethod "$api/releases/$($release.id)/assets/$($asset.id)" -Method Delete -Headers $headers | Out-Null }
           Invoke-RestMethod "$api/releases/$($release.id)/assets?name=shows-remote-windows-amd64.zip" -Method Post -Headers $headers -Form @{attachment=Get-Item shows-remote-windows-amd64.zip} | Out-Null
           Invoke-RestMethod "$api/releases/$($release.id)" -Method Patch -Headers $headers -ContentType application/json -Body '{"draft":false}' | Out-Null
+      - name: Delete the files of older releases
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: romaine-life/pipeline-templates/actions/prune-releases@main
