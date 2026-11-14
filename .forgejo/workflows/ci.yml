@@ -57,7 +57,7 @@ jobs:
             echo GIT_CONFIG_KEY_0=http.https://forgejo.romaine.life/nelsong6/shows.git.extraheader
             echo "GIT_CONFIG_VALUE_0=Authorization: Basic $auth"
           } >> "$GITHUB_ENV"
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: romaine-life/pipeline-templates/actions/rust-toolchain@main
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --locked
 
@@ -89,7 +89,7 @@ jobs:
           path: target
           key: shows-remote-windows-v1-${{ hashFiles('Cargo.lock') }}
           restore-keys: shows-remote-windows-v1-
-      - run: rustup update stable --no-self-update
+      - uses: romaine-life/pipeline-templates/actions/rust-toolchain@main
       - name: Test and build debug client
         run: |
           cargo test --locked -j 4
