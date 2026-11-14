@@ -21,7 +21,7 @@ Use at most four local Cargo jobs and keep debug builds warm in
 player. `--local` exercises it against a local player.
 
 CI validates Windows and Linux clients; main builds, stamps and signs the Windows
-release without compiling the desktop or fetching libmpv, drafts `remote-<sha>` with
+release without compiling the desktop or fetching libmpv, drafts the numbered `v0.1.N` release with
 `shows-remote-windows-amd64.exe`, and pipeline-templates' home-sync workflow publishes it
 and starts home-sync on every PC. home-sync installs it under
 `C:\Program Files\at-home\shows-remote\<tag>` behind the `current` junction, after

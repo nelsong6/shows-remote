@@ -14,7 +14,7 @@ use transport::Session;
 
 #[derive(Parser)]
 #[command(
-    version = version(),
+    version = info::version(),
     about = "Control a running Shows desktop on this PC or another home PC.",
     after_help = "Examples:\n  shows-remote\n  shows-remote upstairspc play\n  shows-remote upstairspc play \"The Simpsons\"\n  shows-remote upstairspc status --json\n\nNo arguments opens the instance picker. The target must already have Shows open."
 )]
@@ -30,14 +30,6 @@ struct Args {
     local: bool,
     #[command(subcommand)]
     command: Option<Action>,
-}
-
-fn version() -> String {
-    format!(
-        "{} ({})",
-        env!("CARGO_PKG_VERSION"),
-        option_env!("SHOWS_BUILD_SHA").unwrap_or("source")
-    )
 }
 
 #[derive(Subcommand)]

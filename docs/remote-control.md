@@ -94,12 +94,13 @@ round. The target owns playback and all authoritative NAS transactions.
 
 - **C7. Info panel.** The palette's **info** action is always available and
   replaces the screen until any key, which only closes it. It lists Repo, Link,
-  Version (the `remote-<sha>` release tag), Built (Pacific time and plain elapsed
+  Version (the `v0.1.N` release), Built (Pacific time and plain elapsed
   language), Installed (`current_exe`), Checkout (`D:\repos\<repo-name>` when
   that folder has `.git`, else "no checkout on this PC") and Log (the app log's
   path, and why it isn't writing if it isn't). CI stamps repo, link,
-  commit and build time at compile time from `GITHUB_REPOSITORY`,
-  `GITHUB_SERVER_URL`, `SHOWS_BUILD_SHA` and `SHOWS_BUILD_TIME`; none is typed into
+  version and build time at compile time from `GITHUB_REPOSITORY`,
+  `GITHUB_SERVER_URL`, `SHOWS_VERSION` (pipeline-templates' release-version step) and
+  `SHOWS_BUILD_TIME`; none is typed into
   source. Each unstamped value reads "development build, not from CI", and
   unreadable values are stated. The text is borderless and fixed once opened, and
   the app requests no mouse reporting, so the terminal's normal selection gesture
@@ -110,7 +111,7 @@ round. The target owns playback and all authoritative NAS transactions.
 
 - **L1. One file, in the pile.** The client appends to
   `%LOCALAPPDATA%\shows-remote\shows-remote.log` on its PC, and log-ship sends it to
-  the pile (`log-search --app shows-remote`). `start` names the `remote-<sha>` release.
+  the pile (`log-search --app shows-remote`). `start` names the `v0.1.N` release.
   A line starts with UTC time to the millisecond, then level, `client`, `pid=`, the
   event and `name=value` fields, so it reads by time beside the target's `shows.log`.
 - **L2. What a failure leaves.** The client logs each instance it probed and why it
@@ -140,7 +141,7 @@ round. The target owns playback and all authoritative NAS transactions.
 ## Distribution and evidence
 
 Each release from main is one immutable, at-terminal-signed executable,
-`shows-remote-windows-amd64.exe` on Forgejo release `remote-<sha>`. home-sync installs
+`shows-remote-windows-amd64.exe` on Forgejo release `v0.1.N`. home-sync installs
 it as a managed tool in `C:\Program Files\at-home\shows-remote\<tag>`, checking the
 signature before switching the `current` junction, and the at menu's
 `system:shows-remote tool:shows-remote` launches that program directly, in one window

@@ -29,8 +29,9 @@ Git revision and read from Forgejo's `nelsong6/shows` with the git CLI
 network, so a source build needs it. Client and player release SHAs can differ while both implement protocol 1.
 
 Windows and Linux CI run the client tests, and Windows CI signs every build. Only
-main compiles an optimized Windows client, stamping the repo, link, commit and build
-time the palette's **info** panel shows. It drafts `remote-<sha>` with the signed
+main compiles an optimized Windows client, stamping the repo, link, version and build
+time the palette's **info** panel shows. It numbers the release `v0.1.N` with
+pipeline-templates' release-version step and drafts it with the signed
 `shows-remote-windows-amd64.exe`, and pipeline-templates' home-sync workflow
 publishes it and starts home-sync on every home PC.
 

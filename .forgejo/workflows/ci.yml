@@ -73,6 +73,13 @@ jobs:
         shell: pwsh -NoLogo -NoProfile -NonInteractive -Command "$ErrorActionPreference = 'Stop'; . ([scriptblock]::Create([IO.File]::ReadAllText('{0}'))); if (Test-Path variable:LASTEXITCODE) { exit $LASTEXITCODE }"
     steps:
       - uses: actions/checkout@v4
+      # The remote's version and its release tag (PIPT-7): main reserves the next v0.1.N on
+      # this commit; any other run is named after it, v0.1.N-prP.R, and is not released.
+      - id: version
+        uses: romaine-life/pipeline-templates/actions/release-version@main
+        with:
+          prefix: v0.1
+          publish: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
       - uses: romaine-life/pipeline-templates/actions/home-cache@main
       - name: Sign in to read shows-control from Forgejo
         env:
@@ -99,7 +106,7 @@ jobs:
       - name: Build release client
         if: github.event_name != 'pull_request'
         env:
-          SHOWS_BUILD_SHA: ${{ github.sha }}
+          SHOWS_VERSION: ${{ steps.version.outputs.version }}
         run: |
           $env:SHOWS_BUILD_TIME=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
           cargo build --release --locked -j 4
@@ -126,12 +133,13 @@ jobs:
       # Leaves a complete draft; the home-sync job publishes it and starts every PC's install.
       - name: Draft the release
         id: publish
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        if: steps.version.outputs.tag != ''
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           $asset='shows-remote-windows-amd64.exe'
-          $sha=(git rev-parse HEAD).Trim(); $tag='remote-' + $sha.Substring(0,7)
+          $sha=(git rev-parse HEAD).Trim(); $tag=$env:TAG
           $api="$env:GITHUB_SERVER_URL/api/v1/repos/$env:GITHUB_REPOSITORY"
           $headers=@{Authorization="token $env:TOKEN"}
           $existing=Invoke-RestMethod "$api/releases/tags/$tag" -Headers $headers -SkipHttpErrorCheck -StatusCodeVariable code

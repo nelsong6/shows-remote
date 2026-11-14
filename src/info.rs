@@ -1,5 +1,6 @@
 //! The palette's info panel. Identity comes from CI's build stamp and the running
-//! process; a value that is missing or unreadable says so on screen.
+//! process; a value that is missing or unreadable says so on screen. The version is
+//! release-version's (pipeline-templates), `v0.1.N` on a release.
 use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -14,14 +15,14 @@ const REPOS: &str = r"D:\repos";
 struct Stamp<'a> {
     repo: Option<&'a str>,
     server: Option<&'a str>,
-    commit: Option<&'a str>,
+    version: Option<&'a str>,
     built: Option<&'a str>,
 }
 
 const BUILD: Stamp = Stamp {
     repo: option_env!("GITHUB_REPOSITORY"),
     server: option_env!("GITHUB_SERVER_URL"),
-    commit: option_env!("SHOWS_BUILD_SHA"),
+    version: option_env!("SHOWS_VERSION"),
     built: option_env!("SHOWS_BUILD_TIME"),
 };
 
@@ -117,15 +118,13 @@ fn checkout(root: &Path, repo: Option<&str>) -> String {
     }
 }
 
-fn release(commit: Option<&str>) -> String {
-    present(commit).map_or(DEVELOPMENT.into(), |commit| {
-        format!("remote-{}", commit.get(..7).unwrap_or(commit))
-    })
+fn release(version: Option<&str>) -> String {
+    present(version).map_or(DEVELOPMENT.into(), str::to_owned)
 }
 
-/// The release tag, which is how the log names the build that wrote a line.
+/// The release version, which is how `--version` and the log name the build.
 pub fn version() -> String {
-    release(BUILD.commit)
+    release(BUILD.version)
 }
 
 fn panel(stamp: Stamp, now: i64, exe: io::Result<PathBuf>, repos: &Path, log: String) -> String {
@@ -136,7 +135,7 @@ fn panel(stamp: Stamp, now: i64, exe: io::Result<PathBuf>, repos: &Path, log: St
     let rows = [
         ("Repo", repo.unwrap_or(DEVELOPMENT).to_owned()),
         ("Link", link.unwrap_or_else(|| DEVELOPMENT.into())),
-        ("Version", release(stamp.commit)),
+        ("Version", release(stamp.version)),
         ("Built", built(stamp.built, now)),
         ("Installed", installed(exe)),
         ("Checkout", checkout(repos, repo)),
@@ -171,13 +170,13 @@ mod tests {
     const STAMPED: Stamp = Stamp {
         repo: Some("nelsong6/shows-remote"),
         server: Some("https://forgejo.romaine.life/"),
-        commit: Some("4daba4f0123456789abcdef0123456789abcdef0"),
+        version: Some("v0.1.4"),
         built: Some("1793661240"),
     };
     const UNSTAMPED: Stamp = Stamp {
         repo: None,
         server: None,
-        commit: None,
+        version: None,
         built: None,
     };
     const NOW: i64 = 1793661240 + 2 * 86400;
@@ -202,7 +201,7 @@ mod tests {
             line(&text, "Link"),
             "https://forgejo.romaine.life/nelsong6/shows-remote"
         );
-        assert_eq!(line(&text, "Version"), "remote-4daba4f");
+        assert_eq!(line(&text, "Version"), "v0.1.4");
         assert_eq!(line(&text, "Log"), LOG);
         assert_eq!(line(&text, "Built"), "Nov 2, 3:14 PM Pacific (2 days ago)");
         assert_eq!(line(&text, "Installed"), r"C:\apps\shows-remote.exe");
@@ -215,7 +214,7 @@ mod tests {
             Stamp {
                 repo: Some(""),
                 server: Some("  "),
-                commit: Some(""),
+                version: Some(""),
                 built: Some(""),
             },
         ] {

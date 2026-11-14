@@ -81,7 +81,7 @@ Check what the change affects:
   palette opens fzt's own key help; Escape steps back out.
 - **Info:** Repo, Link, Version, Built, Installed, Checkout and Log. A local build reads
   `development build, not from CI` on the stamped lines; a release shows
-  `remote-<sha>` and the versioned path. Any key closes it.
+  its `v0.1.N` and the versioned path. Any key closes it.
 - **Resize:** `tmux -L srqa resize-window -t system:shows-remote -x 40 -y 12`, then back.
 - **Selection:** the app requests no mouse reporting; drag across text in a real
   at-terminal and paste it. A tmux capture does not exercise selection.
@@ -138,7 +138,7 @@ that window runs the new release, without him closing or reopening it.
 Documentation-only changes need no restart.
 
 1. Confirm the install: `home-sync tools` lists `shows-remote` at the new
-   `remote-<sha>`, and on the managed program `--version` prints that commit and
+   `v0.1.N`, and on the managed program `--version` prints that version and
    `Get-AuthenticodeSignature` is `Valid`, `CN=at-terminal`.
 2. Find his pane and its process. Match `pane_pid` to the process or its parent; never
    reuse a pane ID from an earlier session.
