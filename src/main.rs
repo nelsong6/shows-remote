@@ -46,6 +46,8 @@ enum Action {
     Pause,
     /// Toggle fullscreen on the controlled TV, leaving playback unchanged.
     Fullscreen,
+    /// Play another playlist, from where it was left.
+    Playlist { name: String },
     /// Mark the current episode watched and move forward.
     Skip,
     /// Navigate back without marking watched.
@@ -122,6 +124,7 @@ fn run() -> Result<(), String> {
         Action::Play { show: None } => Command::Play {},
         Action::Pause => Command::Pause {},
         Action::Fullscreen => Command::Fullscreen {},
+        Action::Playlist { name } => Command::SelectPlaylist { playlist: name },
         Action::Skip => Command::Skip {},
         Action::Previous => Command::Previous {},
         Action::Defer => Command::Defer {},

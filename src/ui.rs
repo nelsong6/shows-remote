@@ -246,7 +246,11 @@ fn draw(frame: &mut TerminalFrame, model: &Model, target: &str) {
             .block(
                 Block::bordered()
                     .title(format!(
-                        " Shows Remote → {target}  ·  {state}{} ",
+                        " Shows Remote → {target}{}  ·  {state}{} ",
+                        match model.status["playlist"].as_str() {
+                            Some(playlist) if !playlist.is_empty() => format!("  ·  {playlist}"),
+                            _ => String::new(),
+                        },
                         if model.status["window_fullscreen"] == true {
                             " · fullscreen"
                         } else {
@@ -398,6 +402,22 @@ fn palette_choices(model: &Model) -> Vec<Choice> {
             name: "Toggle fullscreen".into(),
             description: "Change the controlled TV window; leave playback unchanged".into(),
         });
+        let playing = model.status["playlist"].as_str().unwrap_or("");
+        for (index, playlist) in model.status["playlists"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .enumerate()
+        {
+            if playlist.as_str() != Some(playing) {
+                choices.push(Choice {
+                    id: format!("playlist:{index}"),
+                    name: format!("Play the {} playlist", text(playlist)),
+                    description: "Switch this instance; it resumes where that playlist was left"
+                        .into(),
+                });
+            }
+        }
     }
     if model.ready() {
         for (id, name) in [
@@ -446,6 +466,12 @@ fn palette_command(model: &Model, action: &str) -> Option<Command> {
         "quieter" => KeyCode::Char('-'),
         "louder" => KeyCode::Char('+'),
         _ => {
+            if let Some(index) = action.strip_prefix("playlist:") {
+                let index = index.parse::<usize>().ok()?;
+                return Some(Command::SelectPlaylist {
+                    playlist: model.status["playlists"][index].as_str()?.to_owned(),
+                });
+            }
             let index = action.strip_prefix("show:")?.parse::<usize>().ok()?;
             return Some(Command::PlayShow {
                 show_id: model.status["round"][index]["show_id"].as_str()?.to_owned(),
@@ -592,7 +618,10 @@ pub fn run(mut session: Session, target: &str, local: bool) -> Result<bool, Stri
                     || (model.connected
                         && model.pending.is_none()
                         && (code == KeyCode::Char('f')
-                            || selected_command == Some(Command::Fullscreen {}))) =>
+                            || matches!(
+                                selected_command,
+                                Some(Command::Fullscreen {} | Command::SelectPlaylist { .. })
+                            ))) =>
                 {
                     if let Some(command) = selected_command.or_else(|| model.control(code)) {
                         match connection
@@ -699,6 +728,32 @@ mod tests {
         assert_eq!(palette_command(&model, "switch"), None);
         assert_eq!(palette_command(&model, "quit"), None);
         assert_eq!(palette_command(&model, "show:100"), None);
+    }
+
+    #[test]
+    fn other_playlists_are_offered_without_a_loaded_episode() {
+        let mut model = Model::connecting(1);
+        model.connected = true;
+        model.pending = None;
+        model.status = json!({
+            "phase": "drained",
+            "playlist": "background",
+            "playlists": ["background", "interesting"],
+            "round": [],
+        });
+        let offered: Vec<String> = palette_choices(&model)
+            .into_iter()
+            .filter(|c| c.id.starts_with("playlist:"))
+            .map(|c| c.id)
+            .collect();
+        assert_eq!(offered, ["playlist:1"]);
+        assert_eq!(
+            palette_command(&model, "playlist:1"),
+            Some(Command::SelectPlaylist {
+                playlist: "interesting".into()
+            })
+        );
+        assert_eq!(palette_command(&model, "playlist:7"), None);
     }
 
     #[test]

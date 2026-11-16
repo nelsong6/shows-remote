@@ -868,7 +868,7 @@ dependencies = [
 [[package]]
 name = "shows-control"
 version = "0.1.0"
-source = "git+https://forgejo.romaine.life/nelsong6/shows.git?rev=0670c7bacc8902b4b9acc429923c8f426086d096#0670c7bacc8902b4b9acc429923c8f426086d096"
+source = "git+https://forgejo.romaine.life/nelsong6/shows.git?rev=cf0141b4b1c5468d5660e0b0832e71a07ba307b1#cf0141b4b1c5468d5660e0b0832e71a07ba307b1"
 dependencies = [
  "serde",
  "serde_json",

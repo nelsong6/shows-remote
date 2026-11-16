@@ -35,7 +35,7 @@ round. The target owns playback and all authoritative NAS transactions.
   `shows-desktop` and protocol 1. A missing, stopped, or different listener fails
   explicitly. Every new connection checks identity.
 - **T5. Narrow native surface.** `POST /remote/control` accepts typed playback
-  commands and fullscreen toggle, requires JSON, and rejects browser Origin
+  commands, playlist selection and fullscreen toggle, requires JSON, and rejects browser Origin
   headers. It exposes no library import, filesystem browsing, shell execution,
   or other window actions.
 
@@ -52,6 +52,11 @@ round. The target owns playback and all authoritative NAS transactions.
   Success acknowledges posting the window's toggle message; the authoritative
   `window_fullscreen` SSE field confirms the resulting state. Missing windows
   or failed UI-message posting return errors; toggles are never replayed.
+  **Play the … playlist** lists the target's other playlists (its status
+  `playlists`) and is likewise available without a loaded episode, so a drained
+  playlist can be left. The target saves the choice and resumes that playlist where
+  it was left ([playlist invariants](https://forgejo.romaine.life/nelsong6/shows/src/branch/main/docs/feature-contracts/round-and-advance.md#playlists));
+  the title shows the playlist from live status.
 
 - **C1. Existing round semantics.** Skip, previous, defer and show navigation use
   the overlay's runner. [round-and-advance.md](https://forgejo.romaine.life/nelsong6/shows/src/branch/main/docs/feature-contracts/round-and-advance.md) invariants

@@ -85,6 +85,26 @@ fn rejected_control_exits_nonzero_and_surfaces_the_target_error() {
 }
 
 #[test]
+fn playlist_selects_by_name_through_the_native_control_route() {
+    let output = run(
+        &["playlist", "background"],
+        vec![
+            identity(),
+            (
+                "/remote/control",
+                json!({"ok":true,"message":"playing background"}),
+            ),
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("playing background"));
+}
+
+#[test]
 fn fullscreen_uses_the_native_control_route() {
     let output = run(
         &["fullscreen"],
