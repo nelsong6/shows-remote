@@ -156,11 +156,14 @@ fn watch(
         }
         forwarded.send(frame).map_err(|e| e.to_string())
     });
-    if let Err(message) = ended {
-        if !closing.load(Ordering::Relaxed) {
-            log::warn("connection-lost", &[("target", &target), ("message", &message)]);
-            let _ = events.send(Frame::Disconnected { message });
-        }
+    if let Err(message) = ended
+        && !closing.load(Ordering::Relaxed)
+    {
+        log::warn(
+            "connection-lost",
+            &[("target", &target), ("message", &message)],
+        );
+        let _ = events.send(Frame::Disconnected { message });
     }
 }
 

@@ -104,8 +104,8 @@ round. The target owns playback and all authoritative NAS transactions.
   that folder has `.git`, else "no checkout on this PC") and Log (the app log's
   path, and why it isn't writing if it isn't). CI stamps repo, link,
   version and build time at compile time from `GITHUB_REPOSITORY`,
-  `GITHUB_SERVER_URL`, `SHOWS_VERSION` (pipeline-templates' release-version step) and
-  `SHOWS_BUILD_TIME`; none is typed into
+  `GITHUB_SERVER_URL`, `VERSION` and `BUILD_TIME` (pipeline-templates' release suite
+  sets both for the build); none is typed into
   source. Each unstamped value reads "development build, not from CI", and
   unreadable values are stated. The text is borderless and fixed once opened, and
   the app requests no mouse reporting, so the terminal's normal selection gesture

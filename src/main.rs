@@ -66,7 +66,11 @@ enum Action {
 fn run() -> Result<(), String> {
     let args = Args::parse();
     log::open("client");
-    let mode = if args.command.is_some() { "command" } else { "interactive" };
+    let mode = if args.command.is_some() {
+        "command"
+    } else {
+        "interactive"
+    };
     log::info(
         "start",
         &[
@@ -82,8 +86,11 @@ fn run() -> Result<(), String> {
         return Err("The interactive remote needs a terminal. Use a command such as status --json for scripts.".into());
     }
     if args.command.is_none() {
-        crossterm::execute!(std::io::stdout(), crossterm::terminal::SetTitle("Shows remote"))
-            .map_err(|e| format!("Could not set the Shows remote window title: {e}"))?;
+        crossterm::execute!(
+            std::io::stdout(),
+            crossterm::terminal::SetTitle("Shows remote")
+        )
+        .map_err(|e| format!("Could not set the Shows remote window title: {e}"))?;
         let mut target = args.target.map(|host| discovery::Target {
             host,
             local: args.local,
@@ -143,9 +150,12 @@ fn run() -> Result<(), String> {
         match command {
             Command::Status {} => print_status(&result),
             Command::Preview {} => {
-                let preview: shows_control::preview::VideoPreview = serde_json::from_value(result).map_err(|e| e.to_string())?;
+                let preview: shows_control::preview::VideoPreview =
+                    serde_json::from_value(result).map_err(|e| e.to_string())?;
                 preview.validate()?;
-                for line in preview.fit(100, 40) { println!("{line}"); }
+                for line in preview.fit(100, 40) {
+                    println!("{line}");
+                }
             }
             Command::Queue {} => {
                 if let Some(round) = result.as_array() {

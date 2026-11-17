@@ -69,10 +69,10 @@ fn requested() -> Result<(String, u64), String> {
 
 fn current(held: &Held) -> Result<String, String> {
     let mut held = held.lock().unwrap();
-    if let Some((token, expires)) = held.as_ref() {
-        if now() + RENEW_BEFORE_SECONDS < *expires {
-            return Ok(token.clone());
-        }
+    if let Some((token, expires)) = held.as_ref()
+        && now() + RENEW_BEFORE_SECONDS < *expires
+    {
+        return Ok(token.clone());
     }
     let (token, expires) = requested().inspect_err(|error| {
         log::warn("sign-in-failed", &[("error", error)]);
@@ -125,7 +125,12 @@ mod tests {
             parsed(r#"{"token":"signed","expires_at":99}"#).unwrap(),
             ("signed".to_owned(), 99)
         );
-        for bad in ["", "{}", r#"{"token":"","expires_at":99}"#, r#"{"token":"signed"}"#] {
+        for bad in [
+            "",
+            "{}",
+            r#"{"token":"","expires_at":99}"#,
+            r#"{"token":"signed"}"#,
+        ] {
             assert!(parsed(bad).is_err(), "{bad}");
         }
     }
@@ -138,7 +143,10 @@ mod tests {
 
     fn held_for(seconds: u64) -> (&'static Held, &'static AtomicBool) {
         (
-            Box::leak(Box::new(Mutex::new(Some(("old".to_owned(), now() + seconds))))),
+            Box::leak(Box::new(Mutex::new(Some((
+                "old".to_owned(),
+                now() + seconds,
+            ))))),
             Box::leak(Box::new(AtomicBool::new(false))),
         )
     }

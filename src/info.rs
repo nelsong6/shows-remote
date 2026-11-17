@@ -22,8 +22,8 @@ struct Stamp<'a> {
 const BUILD: Stamp = Stamp {
     repo: option_env!("GITHUB_REPOSITORY"),
     server: option_env!("GITHUB_SERVER_URL"),
-    version: option_env!("SHOWS_VERSION"),
-    built: option_env!("SHOWS_BUILD_TIME"),
+    version: option_env!("VERSION"),
+    built: option_env!("BUILD_TIME"),
 };
 
 fn present(value: Option<&str>) -> Option<&str> {
