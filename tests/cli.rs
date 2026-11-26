@@ -176,11 +176,14 @@ fn a_session_logs_the_target_what_was_sent_and_what_came_back() {
     );
     assert!(output.status.success());
     for line in log.lines() {
-        let (time, _) = line.split_once(' ').unwrap();
-        assert!(time.ends_with('Z') && time.as_bytes()[10] == b'T', "{line}");
+        let entry = logline::parse(line).unwrap_or_else(|e| panic!("{e}: {line}"));
+        assert!(
+            entry.fields.contains(&("role".into(), "client".into())),
+            "{line}"
+        );
     }
     let positions: Vec<_> = [
-        "client pid=",
+        " start ",
         "connect target=thispc via=local",
         "send target=thispc id=1 command=Pause",
         "reply target=thispc id=1 command=Pause",
@@ -234,7 +237,7 @@ fn a_rejected_command_keeps_its_reason_and_loses_its_secrets() {
     assert!(log.contains("rejected target=thispc id=1"), "{log}");
     assert!(log.contains("player unavailable"), "{log}");
     assert!(!log.contains("hunter2"), "{log}");
-    assert!(log.contains("ERROR client pid="), "{log}");
+    assert!(log.contains(" error exit "), "{log}");
 }
 
 #[test]

@@ -21,7 +21,7 @@ build on every pull request, and on main builds, stamps, signs and releases it.
 | `tests/cli.rs` | One-shot commands against an in-test player: JSON output, rejected controls, fullscreen, ambiguous show names sending nothing, no implicit target, no interactive mode without a terminal, sign-in before anything goes to another PC, what the log records, an unwritable log |
 | `src/ui.rs` | Palette actions, controls disabled while disconnected or waiting, the video view and its failures, the info panel, small resizes |
 | `src/info.rs` | Stamped and unstamped info panels, Pacific time and elapsed wording, checkout and path failures |
-| `src/log.rs` | Line format, secret scrubbing, rolling at 4 MiB, concurrent writers |
+| `src/log.rs` | The standard logline line with its role, masking through logline's `redact`, the value cap, a log that can't be opened |
 | `src/discovery.rs`, `src/picker.rs` | Inventory parsing, picker rows that target text can't forge |
 | `src/transport.rs`, `src/token.rs` | Reply logging without bodies, token renewal |
 

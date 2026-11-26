@@ -117,8 +117,10 @@ round. The target owns playback and all authoritative NAS transactions.
 - **L1. One file, in the pile.** The client appends to
   `%LOCALAPPDATA%\shows-remote\shows-remote.log` on its PC, and log-ship sends it to
   the pile (`log-search --app shows-remote`). `start` names the `v0.1.N` release.
-  A line starts with UTC time to the millisecond, then level, `client`, `pid=`, the
-  event and `name=value` fields, so it reads by time beside the target's `shows.log`.
+  Each line is the house's one log line, written by logline (AHT-204): local time to
+  the millisecond with its zone, `pid=`, the level (`info`, `warn`, `error`), the event,
+  then the event's `name=value` fields and `role=client`, so it reads by time beside
+  the target's `shows.log`.
 - **L2. What a failure leaves.** The client logs each instance it probed and why it
   was unavailable (`instance-available`, `instance-unavailable`), the connection
   (`connect`, `connect-failed`, `connection-lost`), its sign-in (`signed-in`,
@@ -129,18 +131,19 @@ round. The target owns playback and all authoritative NAS transactions.
   logs playback state only when it changes, clock excluded, so a command that did
   nothing shows as a `reply` with no `status` after it.
 - **L3. Bounded.** No line per status or heartbeat. Preview reads log only when
-  their outcome changes. A value stops at 1,024 characters. Past 4 MiB the file
-  rolls to `shows-remote.log.old`, replacing the last one; the listed name never
-  matches the old file, so the pile gets no line twice. Lines log-ship hadn't sent
-  when the file rolled are on this PC only.
+  their outcome changes. A value stops at 1,024 characters. Past 1 MiB logline
+  moves the file to `shows-remote.log.old`, replacing the last one; the listed name
+  never matches the old file, so the pile gets no line twice. Lines log-ship hadn't
+  sent when the file rolled are on this PC only.
 - **L4. Nothing secret.** A reply's body, the round, preview frames and tokens are
   never logged, only the summary fields above. Every value is still treated as outside
-  text: private key blocks, long opaque strings, `name=value` secrets, URL
-  credentials and query strings are removed, and control characters can't start a
-  new line.
+  text: it goes through logline's `redact`, the estate's one list of credential shapes
+  (`name=value` secrets, bearer and basic headers, URL credentials and credential
+  parameters, signed tokens), and logline quotes control characters, so none can
+  start a new line.
 - **L5. Never in the way.** Nothing goes to stdout or stderr: those belong to the
   full-screen UI. A write that fails changes nothing about the
-  session and shows on the info panel's Log row. `SHOWS_REMOTE_LOG` names another
+  session; a log that can't be opened at start shows on the info panel's Log row. `SHOWS_REMOTE_LOG` names another
   file for tests and isolated runs.
 
 ## Distribution and evidence
