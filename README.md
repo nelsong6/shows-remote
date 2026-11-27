@@ -25,7 +25,7 @@ jobs. Protocol changes are checked against the desktop's `/remote/info`
 before controls. The desktop-owned `shows-control` crate is pinned by immutable
 Git revision and read from Forgejo's `nelsong6/shows` with the git CLI
 (`.cargo/config.toml`), signed in by git's credential helper here and by
-`PIPELINE_DISPATCH_TOKEN` in CI (FORGEJO-29); Forgejo answers only on the home
+a short-lived token from the job's identity in CI (FORGEJO-29, SES-267); Forgejo answers only on the home
 network, so a source build needs it. Client and player release SHAs can differ while both implement protocol 1.
 
 Windows and Linux CI run the client tests, and Windows CI signs every build. Only
