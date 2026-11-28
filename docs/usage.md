@@ -16,8 +16,9 @@ instances first, and explains unavailable PCs. Select an instance to control it;
 The remote is one copy
 ([FP-17](https://openproject.home.romaine.life/wp/FP-17)): the at menu brings its one
 window back, and a picker started any other way while it is open (typed in a shell, a
-script) waits up to 5 seconds, prints `shows-remote is already open` and exits 1. The
-commands below run whenever, with the remote open or not.
+script) prints `shows-remote is already open` and exits 1 at once. Only a remote that is
+ending is waited for, up to 5 seconds. The commands below run whenever, with the remote
+open or not.
 
 Press `/` in the controller for its fzt command palette: playback controls,
 **Toggle fullscreen** on the controlled TV (`f` is the shortcut),

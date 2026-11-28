@@ -721,7 +721,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 [[package]]
 name = "one-copy"
 version = "0.1.0"
-source = "git+https://forgejo.romaine.life/romaine-life/one-copy?tag=v0.1.0#65075f155fa7b9a19bd266f76994793b8761c6fd"
+source = "git+https://forgejo.romaine.life/romaine-life/one-copy?tag=v0.1.1#e6b219cd41866cb7ec7c91d8c9cd2aeec181cd72"
 dependencies = [
  "libc",
  "windows-sys",
