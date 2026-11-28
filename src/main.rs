@@ -86,6 +86,11 @@ fn run() -> Result<(), String> {
         return Err("The interactive remote needs a terminal. Use a command such as status --json for scripts.".into());
     }
     if args.command.is_none() {
+        // One remote at a time (FP-17): the at menu brings its one window back, and a
+        // picker opened some other way says so and exits before it touches the
+        // terminal. Commands (`status --json`, `play`, ...) never take the lock: scripts
+        // and Claude sessions run them while the remote is open.
+        one_copy::claim_or_exit("shows-remote");
         crossterm::execute!(
             std::io::stdout(),
             crossterm::terminal::SetTitle("Shows remote")

@@ -48,6 +48,7 @@ tmux-throwaway start srqa -- -d -s system -x 120 -y 35
 tmux -L srqa set-environment -g SHOWS_CONTROL_PORT 47911
 tmux -L srqa set-environment -g SHOWS_REMOTE_LOG "$qa\remote.log"
 tmux -L srqa set-environment -g SHOWS_REMOTE_INVENTORY "$qa\inventory.json"
+tmux -L srqa set-environment -g ONE_COPY_SCOPE srqa
 tmux -L srqa set -g '@session-set-dir' ("$qa\session-set" -replace '\\', '/')
 tmux -L srqa new-window -d -M shows-remote -t system: -o remain-on-exit=relaunch $exe
 tmux -L srqa list-windows -t system -F '#{window_index} #{window_name} #{@shows-remote-window} #{remain-on-exit}'
@@ -56,10 +57,11 @@ tmux -L srqa capture-pane -p -t system:shows-remote
 
 Shows remote is a system-session app: the at menu's entry is
 `system:shows-remote tool:shows-remote`, which fzt-automate runs as the `new-window -M`
-line above (D:
-epost\README.md, `system:`), with no arguments. The test's variables go
+line above (D:\repos\at\README.md, `system:`), with no arguments. The test's variables go
 in the server's environment, not `-e`: a `reopen-window` rerun drops `-e` variables and
-would reach his real inventory. To check a release instead of a development build, set
+would reach his real inventory. `ONE_COPY_SCOPE` gives the test copy a one-copy lock of
+its own; without it, the picker finds his open remote's lock and exits with
+`shows-remote is already open`. To check a release instead of a development build, set
 `$exe` to the managed program `tool:shows-remote` names, `C:\Program Files\at-home\shows-remote\current\shows-remote.exe`; never copy it
 anywhere. Keys go to whatever program has the pane, so capture before every key, and
 read `capture-pane -e` to see which row fzt has highlighted before Enter.
@@ -87,6 +89,13 @@ Check what the change affects:
   at-terminal and paste it. A tmux capture does not exercise selection.
 - **Log:** `$qa\remote.log` has `instance-chosen`, `connect`, `send` and `reply` lines,
   each starting with an RFC 3339 UTC time.
+- **One copy:** with the remote open, start a second picker beside it
+  (`tmux -L srqa new-window -d -t system: -o remain-on-exit=on $exe ''`): after 5 seconds
+  its pane is dead with exit status 1 (`#{pane_dead_status}`) and shows
+  `shows-remote is already open`, with no picker drawn. A command run meanwhile from a
+  shell with the same scope (`$env:ONE_COPY_SCOPE = 'srqa'; $env:SHOWS_CONTROL_PORT = '47911';
+  & $exe --local thispc status --json`) answers as before: only the picker run takes the
+  lock.
 - **System window:** the window is marked `@shows-remote-window` 1 with
   `remain-on-exit` `relaunch`; running the `new-window -M` line again leaves one window
   and one process.

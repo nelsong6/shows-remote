@@ -12,6 +12,12 @@ round. The target owns playback and all authoritative NAS transactions.
   PC, explains unavailable computers, supports refresh, and never starts a player.
   Explicit CLI targets skip discovery; one-shot commands never silently choose
   a computer. The at-menu entry launches the generic app without a target.
+  The interactive run (no command) is one copy
+  ([FP-17](https://openproject.home.romaine.life/wp/FP-17)): it holds
+  [one-copy](https://forgejo.romaine.life/romaine-life/one-copy)'s `shows-remote` lock
+  for its life, taken after the terminal check and before it sets the title, and a
+  second one prints `shows-remote is already open` and exits 1. One-shot commands never
+  take the lock, so scripts and Claude sessions run them while the remote is open.
 
 - **T1. Direct HTTP.** This PC's player answers on `127.0.0.1:45831`
   (`SHOWS_CONTROL_PORT`). Another PC's answers on port 45832 (`SHOWS_REMOTE_PORT`), which

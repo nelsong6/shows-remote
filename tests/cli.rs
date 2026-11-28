@@ -12,6 +12,14 @@ fn remote(log: &std::path::Path) -> Command {
 }
 
 fn session(args: &[&str], replies: Vec<(&'static str, Value)>) -> (std::process::Output, String) {
+    session_with(args, replies, &[])
+}
+
+fn session_with(
+    args: &[&str],
+    replies: Vec<(&'static str, Value)>,
+    env: &[(&str, &str)],
+) -> (std::process::Output, String) {
     let folder = tempfile::tempdir().unwrap();
     let log = folder.path().join("shows-remote.log");
     let server = Server::http("127.0.0.1:0").unwrap();
@@ -30,6 +38,7 @@ fn session(args: &[&str], replies: Vec<(&'static str, Value)>) -> (std::process:
     });
     let result = remote(&log)
         .env("SHOWS_CONTROL_PORT", port.to_string())
+        .envs(env.iter().copied())
         .arg("--local")
         .arg("thispc")
         .args(args)
@@ -149,6 +158,25 @@ fn scripts_get_a_clear_error_instead_of_entering_raw_terminal_mode() {
         .unwrap();
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("needs a terminal"));
+}
+
+#[test]
+fn commands_run_while_the_remote_is_open() {
+    // The open remote's lock, held here under a scope of this run's own (FP-17).
+    let scope = format!("test{}", std::process::id());
+    let _open = one_copy::claim(&format!("shows-remote-{scope}")).unwrap();
+    let (output, _) = session_with(
+        &["status", "--json"],
+        vec![identity(), ("/status", json!({"phase":"paused"}))],
+        &[("ONE_COPY_SCOPE", &scope)],
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let status: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(status["phase"], "paused");
 }
 
 #[test]

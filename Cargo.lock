@@ -719,6 +719,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
+name = "one-copy"
+version = "0.1.0"
+source = "git+https://forgejo.romaine.life/romaine-life/one-copy?tag=v0.1.0#65075f155fa7b9a19bd266f76994793b8761c6fd"
+dependencies = [
+ "libc",
+ "windows-sys",
+]
+
+[[package]]
 name = "palette"
 version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1048,6 +1057,7 @@ dependencies = [
  "clap",
  "crossterm",
  "logline",
+ "one-copy",
  "ratatui",
  "serde_json",
  "shows-control",
